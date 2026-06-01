@@ -6,141 +6,157 @@
 <title>해트케 인플루언서 관리</title>
 <style>
 :root {
-  --bg: #0f0f0f; --surface: #1a1a1a; --surface2: #242424; --surface3: #2e2e2e;
-  --border: #333; --text: #e8e8e8; --muted: #888; --primary: #4f8ef7;
-  --success: #28a745; --warning: #ffc107; --danger: #e74c3c;
+  --bg:#0f0f0f;--surface:#1a1a1a;--surface2:#242424;--surface3:#2e2e2e;
+  --border:#333;--text:#e8e8e8;--muted:#888;--primary:#4f8ef7;
+  --success:#28a745;--warning:#ffc107;--danger:#e74c3c;
 }
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif; font-size: 14px; min-height: 100vh; }
-#app { display: block; }
-header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; gap: 32px; position: sticky; top: 0; z-index: 100; }
-header h1 { font-size: 16px; font-weight: 700; padding: 16px 0; white-space: nowrap; }
-nav { display: flex; gap: 0; }
-nav button { background: none; border: none; color: var(--muted); padding: 16px 20px; cursor: pointer; font-size: 14px; border-bottom: 2px solid transparent; transition: all 0.15s; }
-nav button.active { color: var(--primary); border-bottom-color: var(--primary); }
-nav button:hover:not(.active) { color: var(--text); }
-/* 로딩 인디케이터 */
-#loading-bar { height: 2px; background: var(--primary); position: fixed; top: 0; left: 0; width: 0; z-index: 999; transition: width 0.3s, opacity 0.3s; }
-#loading-bar.active { width: 70%; }
-#loading-bar.done { width: 100%; opacity: 0; }
-.tab { display: none; padding: 24px; max-width: 1200px; margin: 0 auto; }
-.tab.active { display: block; }
-.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-bottom: 24px; }
-.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; cursor: pointer; transition: all 0.15s; }
-.card:hover { border-color: var(--primary); }
-.card-count { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
-.card-label { font-size: 12px; color: var(--muted); }
-.todo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
-.todo-box { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
-.todo-box h3 { font-size: 13px; color: var(--muted); margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
-.todo-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: var(--surface2); border-radius: 6px; margin-bottom: 6px; cursor: pointer; transition: background 0.15s; }
-.todo-item:hover { background: var(--surface3); }
-.todo-item:last-child { margin-bottom: 0; }
-.todo-name { font-weight: 500; }
-.todo-stage { font-size: 11px; padding: 2px 8px; border-radius: 20px; }
-.toolbar { display: flex; gap: 10px; margin-bottom: 16px; align-items: center; flex-wrap: wrap; }
-.toolbar input[type="text"] { flex: 1; min-width: 160px; }
-.filter-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
-.filter-tab { padding: 5px 12px; border-radius: 20px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); cursor: pointer; font-size: 12px; transition: all 0.15s; white-space: nowrap; }
-.filter-tab.active { border-color: var(--primary); color: var(--primary); background: #1a2540; }
-.filter-tab:hover:not(.active) { color: var(--text); border-color: #555; }
-.table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-table { width: 100%; border-collapse: collapse; }
-thead th { background: var(--surface2); padding: 10px 14px; text-align: left; font-size: 12px; color: var(--muted); font-weight: 600; white-space: nowrap; border-bottom: 1px solid var(--border); }
-tbody tr { border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.1s; }
-tbody tr:last-child { border-bottom: none; }
-tbody tr:hover { background: var(--surface2); }
-tbody tr.selected { background: #1a2540; }
-tbody tr.optimistic { opacity: 0.6; }
-td { padding: 10px 14px; vertical-align: middle; }
-.stage-badge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; }
-.followers-text { color: var(--muted); font-size: 13px; }
-.link-btn { color: var(--primary); text-decoration: none; font-size: 12px; padding: 2px 6px; background: #1a2540; border-radius: 4px; }
-.link-btn:hover { background: #243050; }
-#detail-panel { position: fixed; top: 0; right: -440px; width: 440px; height: 100vh; background: var(--surface); border-left: 1px solid var(--border); overflow-y: auto; transition: right 0.25s ease; z-index: 200; }
-#detail-panel.open { right: 0; }
-.panel-header { padding: 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; background: var(--surface); z-index: 1; }
-.panel-header h2 { font-size: 16px; }
-.panel-body { padding: 20px; }
-.timeline { margin-bottom: 24px; }
-.timeline-item { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 2px; }
-.timeline-dot { width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; margin-top: 1px; }
-.timeline-dot.done { background: var(--success); color: #fff; }
-.timeline-dot.current { background: var(--primary); color: #fff; box-shadow: 0 0 0 3px rgba(79,142,247,0.25); }
-.timeline-dot.pending { background: var(--surface3); color: var(--muted); border: 1px solid var(--border); }
-.timeline-line { width: 1px; height: 16px; background: var(--border); margin-left: 9px; }
-.timeline-label { font-size: 13px; padding: 1px 0; }
-.timeline-label.done { color: var(--muted); }
-.timeline-label.current { font-weight: 600; }
-.timeline-date { font-size: 11px; color: var(--muted); margin-left: 6px; }
-.form-group { margin-bottom: 14px; }
-.form-group label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
-input[type="text"], input[type="number"], input[type="date"], textarea, select { width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; font-size: 14px; outline: none; transition: border-color 0.15s; }
-input:focus, textarea:focus, select:focus { border-color: var(--primary); }
-textarea { resize: vertical; min-height: 70px; }
-.auto-fill { background: var(--surface3) !important; color: var(--muted) !important; }
-.btn { padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.15s; white-space: nowrap; }
-.btn-primary { background: var(--primary); color: #fff; }
-.btn-primary:hover { background: #3d7df0; }
-.btn-success { background: var(--success); color: #fff; }
-.btn-success:hover { background: #219a38; }
-.btn-danger { background: var(--danger); color: #fff; }
-.btn-danger:hover { background: #c0392b; }
-.btn-outline { background: none; border: 1px solid var(--border); color: var(--text); }
-.btn-outline:hover { border-color: #555; background: var(--surface2); }
-.btn-sm { padding: 5px 10px; font-size: 12px; }
-.btn-block { width: 100%; }
-.btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
-.overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 300; padding: 24px; }
-.overlay.open { display: flex; }
-.modal { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px; width: 100%; max-width: 460px; max-height: 90vh; overflow-y: auto; }
-.modal h3 { font-size: 16px; margin-bottom: 20px; }
-.modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
-.settlement-summary { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 20px; }
-.settlement-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
-.settlement-row:last-child { border-bottom: none; }
-.settlement-total { font-size: 18px; font-weight: 700; color: var(--primary); }
-.copy-btn-wrap { margin-top: 16px; }
-.empty { text-align: center; padding: 48px; color: var(--muted); }
-.divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
-.text-muted { color: var(--muted); font-size: 12px; }
-.mt-12 { margin-top: 12px; }
-.checkbox-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.checkbox-row input[type="checkbox"] { width: auto; }
-.section-title { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; margin-top: 20px; }
-.info-row { display: flex; gap: 8px; align-items: center; }
-.sync-badge { font-size: 11px; color: var(--muted); padding: 2px 8px; border-radius: 10px; background: var(--surface2); display: none; }
-.sync-badge.show { display: inline-block; }
-@media (max-width: 600px) {
-  .todo-grid { grid-template-columns: 1fr; }
-  #detail-panel { width: 100%; right: -100%; }
-  .cards { grid-template-columns: repeat(3, 1fr); }
-  header { padding: 0 16px; gap: 16px; }
-  header h1 { font-size: 14px; }
-  .tab { padding: 16px; }
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans-serif;font-size:14px;min-height:100vh}
+#loading-bar{height:2px;background:var(--primary);position:fixed;top:0;left:0;width:0;z-index:999;transition:width .3s,opacity .3s}
+#loading-bar.active{width:70%}
+#loading-bar.done{width:100%;opacity:0}
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;gap:24px;position:sticky;top:0;z-index:100}
+header h1{font-size:16px;font-weight:700;padding:16px 0;white-space:nowrap}
+nav{display:flex}
+nav button{background:none;border:none;color:var(--muted);padding:16px 16px;cursor:pointer;font-size:14px;border-bottom:2px solid transparent;transition:all .15s}
+nav button.active{color:var(--primary);border-bottom-color:var(--primary)}
+nav button:hover:not(.active){color:var(--text)}
+#sync-badge{font-size:11px;color:var(--muted);padding:2px 8px;border-radius:10px;background:var(--surface2);display:none;margin-left:auto}
+#sync-badge.show{display:inline-block}
+.tab{display:none;padding:20px 24px;max-width:1300px;margin:0 auto}
+.tab.active{display:block}
+/* cards */
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:20px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;cursor:pointer;transition:all .15s}
+.card:hover{border-color:var(--primary)}
+.card-count{font-size:26px;font-weight:700;margin-bottom:3px}
+.card-label{font-size:11px;color:var(--muted)}
+/* todo */
+.todo-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px}
+.todo-box{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px}
+.todo-box h3{font-size:12px;color:var(--muted);margin-bottom:10px;display:flex;align-items:center;gap:5px}
+.todo-item{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--surface2);border-radius:6px;margin-bottom:5px;cursor:pointer;transition:background .15s}
+.todo-item:hover{background:var(--surface3)}
+.todo-item:last-child{margin-bottom:0}
+.todo-name{font-weight:500;font-size:13px}
+.todo-right{display:flex;gap:5px;align-items:center}
+.todo-stage{font-size:10px;padding:2px 7px;border-radius:20px}
+/* toolbar */
+.toolbar{display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap}
+.toolbar input[type=text]{flex:1;min-width:150px}
+/* bulk bar */
+.bulk-bar{display:none;background:var(--surface2);border:1px solid var(--primary);border-radius:8px;padding:8px 14px;margin-bottom:10px;align-items:center;gap:10px;flex-wrap:wrap}
+.bulk-bar.show{display:flex}
+/* filter tabs */
+.filter-tabs{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px}
+.filter-tab{padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:var(--surface);color:var(--muted);cursor:pointer;font-size:11px;transition:all .15s;white-space:nowrap}
+.filter-tab.active{border-color:var(--primary);color:var(--primary);background:#1a2540}
+.filter-tab:hover:not(.active){color:var(--text);border-color:#555}
+/* table */
+.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+table{width:100%;border-collapse:collapse}
+thead th{background:var(--surface2);padding:9px 12px;text-align:left;font-size:11px;color:var(--muted);font-weight:600;white-space:nowrap;border-bottom:1px solid var(--border)}
+tbody tr{border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:var(--surface2)}
+tbody tr.selected{background:#1a2540}
+tbody tr.optimistic{opacity:.6}
+td{padding:9px 12px;vertical-align:middle}
+.stage-badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:600;white-space:nowrap}
+.muted{color:var(--muted);font-size:12px}
+.link-btn{color:var(--primary);text-decoration:none;font-size:11px;padding:2px 5px;background:#1a2540;border-radius:3px}
+/* detail panel */
+#detail-panel{position:fixed;top:0;right:-460px;width:460px;height:100vh;background:var(--surface);border-left:1px solid var(--border);overflow-y:auto;transition:right .25s ease;z-index:200}
+#detail-panel.open{right:0}
+.panel-header{padding:18px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--surface);z-index:1}
+.panel-header h2{font-size:15px}
+.panel-body{padding:18px 20px}
+/* timeline */
+.timeline{margin-bottom:20px}
+.tl-item{display:flex;align-items:flex-start;gap:10px;margin-bottom:2px}
+.tl-dot{width:18px;height:18px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;margin-top:1px}
+.tl-dot.done{background:var(--success);color:#fff}
+.tl-dot.current{background:var(--primary);color:#fff;box-shadow:0 0 0 3px rgba(79,142,247,.25)}
+.tl-dot.pending{background:var(--surface3);color:var(--muted);border:1px solid var(--border)}
+.tl-line{width:1px;height:14px;background:var(--border);margin-left:8px}
+.tl-label{font-size:12px;padding:1px 0}
+.tl-label.done{color:var(--muted)}
+.tl-label.current{font-weight:600}
+.tl-date{font-size:10px;color:var(--muted);margin-left:5px}
+/* forms */
+.fg{margin-bottom:12px}
+.fg label{display:block;font-size:11px;color:var(--muted);margin-bottom:4px}
+input[type=text],input[type=number],input[type=date],input[type=tel],textarea,select{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-size:13px;outline:none;transition:border-color .15s}
+input:focus,textarea:focus{border-color:var(--primary)}
+textarea{resize:vertical;min-height:60px}
+input[type=file]{background:var(--surface2);border:1px dashed var(--border);color:var(--text);padding:6px 10px;border-radius:6px;cursor:pointer;width:100%;font-size:12px}
+.file-status{font-size:11px;color:var(--muted);display:block;margin-top:3px}
+.file-status.ok{color:var(--success)}
+.file-status.err{color:var(--danger)}
+.auto-fill{background:var(--surface3)!important;color:var(--muted)!important}
+/* buttons */
+.btn{padding:7px 14px;border-radius:6px;border:none;cursor:pointer;font-size:12px;font-weight:600;transition:all .15s;white-space:nowrap}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-primary:hover{background:#3d7df0}
+.btn-success{background:var(--success);color:#fff}
+.btn-success:hover{background:#219a38}
+.btn-danger{background:var(--danger);color:#fff}
+.btn-danger:hover{background:#c0392b}
+.btn-outline{background:none;border:1px solid var(--border);color:var(--text)}
+.btn-outline:hover{border-color:#555;background:var(--surface2)}
+.btn-sm{padding:4px 9px;font-size:11px}
+.btn-block{width:100%}
+.btn-group{display:flex;gap:7px;flex-wrap:wrap}
+/* modal */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:300;padding:20px}
+.overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;width:100%;max-width:450px;max-height:90vh;overflow-y:auto}
+.modal h3{font-size:15px;margin-bottom:16px}
+.modal-footer{display:flex;gap:7px;justify-content:flex-end;margin-top:16px}
+/* settlement */
+.sett-box{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;margin-bottom:16px}
+.sett-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)}
+.sett-row:last-child{border-bottom:none}
+.sett-total{font-size:17px;font-weight:700;color:var(--primary)}
+/* misc */
+.empty{text-align:center;padding:40px;color:var(--muted)}
+.divider{border:none;border-top:1px solid var(--border);margin:14px 0}
+.text-muted{color:var(--muted);font-size:11px}
+.mt-8{margin-top:8px}
+.section-title{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;margin-top:16px}
+.cb-row{display:flex;align-items:center;gap:7px;margin-bottom:7px}
+.cb-row input[type=checkbox]{width:auto}
+.info-row{display:flex;gap:7px;align-items:center}
+.copy-row{display:flex;gap:6px;align-items:center}
+.copy-row input{flex:1}
+@media(max-width:600px){
+  .todo-grid{grid-template-columns:1fr}
+  #detail-panel{width:100%;right:-100%}
+  .cards{grid-template-columns:repeat(3,1fr)}
+  header{padding:0 14px;gap:14px}
+  .tab{padding:14px}
 }
 </style>
 </head>
 <body>
-
 <div id="loading-bar"></div>
-
 <div id="app">
   <header>
     <h1>🎯 해트케 인플루언서</h1>
     <nav>
-      <button class="active" onclick="switchTab('dashboard', this)">대시보드</button>
-      <button onclick="switchTab('management', this)">인플루언서 관리</button>
-      <button onclick="switchTab('settlement', this)">정산</button>
+      <button class="active" onclick="switchTab('dashboard',this)">대시보드</button>
+      <button onclick="switchTab('management',this)">인플루언서 관리</button>
+      <button onclick="switchTab('settlement',this)">정산</button>
     </nav>
-    <span id="sync-badge" class="sync-badge">동기화 중...</span>
+    <span id="sync-badge">동기화 중...</span>
   </header>
 
+  <!-- 대시보드 -->
   <div id="tab-dashboard" class="tab active">
     <div id="stage-cards" class="cards"></div>
     <div class="todo-grid">
       <div class="todo-box">
-        <h3><span style="color:#e74c3c">🔴</span> 내 할 일 (확인 필요)</h3>
+        <h3><span style="color:#e74c3c">🔴</span> 내 할 일</h3>
         <div id="boss-todo"></div>
       </div>
       <div class="todo-box">
@@ -150,49 +166,61 @@ textarea { resize: vertical; min-height: 70px; }
     </div>
   </div>
 
+  <!-- 인플루언서 관리 -->
   <div id="tab-management" class="tab">
     <div class="toolbar">
       <input type="text" id="search-input" placeholder="계정명 또는 이름 검색..." oninput="renderList()">
-      <button class="btn btn-primary" onclick="openAddModal()">+ 인플루언서 추가</button>
+      <button class="btn btn-primary" onclick="openAddModal()">+ 추가</button>
+    </div>
+    <div id="bulk-bar" class="bulk-bar">
+      <span id="bulk-count" style="font-weight:600;color:var(--primary)"></span>
+      <button class="btn btn-primary btn-sm" onclick="bulkAdvance()">→ 다음 단계로</button>
+      <button class="btn btn-sm" style="background:none;border:1px solid var(--danger);color:var(--danger)" onclick="bulkReject()">거절됨으로</button>
+      <button class="btn btn-outline btn-sm" onclick="clearSelection()">✕ 해제</button>
     </div>
     <div id="filter-tabs" class="filter-tabs"></div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>계정명</th><th>이름</th><th>팔로워</th><th>모집일</th><th>단계</th><th>릴스</th></tr></thead>
-        <tbody id="influencer-table"><tr><td colspan="6"><div class="empty" style="padding:32px">데이터 로딩 중...</div></td></tr></tbody>
+        <thead><tr>
+          <th style="width:32px"><input type="checkbox" id="select-all" onchange="toggleSelectAll(event)"></th>
+          <th>계정명</th><th>이름</th><th>팔로워</th><th>모집일</th><th>단계</th><th>액션</th>
+        </tr></thead>
+        <tbody id="influencer-table"><tr><td colspan="7"><div class="empty">로딩 중...</div></td></tr></tbody>
       </table>
     </div>
   </div>
 
+  <!-- 정산 -->
   <div id="tab-settlement" class="tab">
     <div class="toolbar">
       <input type="month" id="settlement-month" onchange="renderSettlement()">
       <button class="btn btn-outline btn-sm" onclick="setThisMonth()">이번달</button>
     </div>
-    <div class="settlement-summary">
-      <div class="settlement-row"><span>DM 발송 건수</span><span id="dm-count">0건 × 2,000원 = <b>0원</b></span></div>
-      <div class="settlement-row"><span>협찬 완료 건수</span><span id="complete-count">0건 × 20,000원 = <b>0원</b></span></div>
-      <div class="settlement-row"><span style="font-weight:600">합계</span><span class="settlement-total" id="total-pay">0원</span></div>
-      <div class="copy-btn-wrap"><button class="btn btn-outline btn-sm" onclick="copySettlement()">📋 클립보드 복사</button></div>
+    <div class="sett-box">
+      <div class="sett-row"><span>DM 발송 건수</span><span id="dm-count">0건 × 2,000원 = <b>0원</b></span></div>
+      <div class="sett-row"><span>협찬 완료 건수</span><span id="complete-count">0건 × 20,000원 = <b>0원</b></span></div>
+      <div class="sett-row"><span style="font-weight:600">합계</span><span class="sett-total" id="total-pay">0원</span></div>
+      <div style="margin-top:12px"><button class="btn btn-outline btn-sm" onclick="copySettlement()">📋 클립보드 복사</button></div>
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>닉네임</th><th>이름</th><th>DM 발송일</th><th>협찬 완료일</th><th>DM 수당</th><th>협찬 수당</th></tr></thead>
+        <thead><tr><th>닉네임</th><th>이름</th><th>DM 발송일</th><th>협찬 완료일</th><th>DM</th><th>협찬</th></tr></thead>
         <tbody id="settlement-table"></tbody>
       </table>
     </div>
   </div>
 </div>
 
+<!-- 추가 모달 -->
 <div class="overlay" id="add-overlay" onclick="closeAddModal(event)">
   <div class="modal" onclick="event.stopPropagation()">
     <h3>인플루언서 추가</h3>
-    <div class="form-group"><label>인스타그램 URL 붙여넣기</label><input type="text" id="insta-url" placeholder="https://www.instagram.com/계정명/reels/" oninput="parseUrl()"></div>
-    <div class="form-group"><label>계정명 (자동 입력)</label><input type="text" id="add-instagram-id" class="auto-fill" readonly placeholder="URL 입력 시 자동"></div>
-    <div class="form-group"><label>릴스 주소 (자동 입력)</label><input type="text" id="add-reels-url" class="auto-fill" readonly placeholder="URL 입력 시 자동"></div>
-    <div class="form-group"><label>이름 (실명 또는 별칭)</label><input type="text" id="add-name" placeholder="홍길동"></div>
-    <div class="form-group"><label>팔로워 수</label><input type="text" id="add-followers" placeholder="12300 또는 12.3만"></div>
-    <div class="form-group"><label>모집일</label><input type="date" id="add-recruited-date"></div>
+    <div class="fg"><label>인스타그램 URL</label><input type="text" id="insta-url" placeholder="https://www.instagram.com/계정명/reels/" oninput="parseUrl()"></div>
+    <div class="fg"><label>계정명 (자동)</label><input type="text" id="add-instagram-id" class="auto-fill" readonly></div>
+    <div class="fg"><label>릴스 주소 (자동)</label><input type="text" id="add-reels-url" class="auto-fill" readonly></div>
+    <div class="fg"><label>이름 (별칭)</label><input type="text" id="add-name" placeholder="홍길동"></div>
+    <div class="fg"><label>팔로워 수</label><input type="text" id="add-followers" placeholder="12300 또는 12.3만"></div>
+    <div class="fg"><label>모집일</label><input type="date" id="add-recruited-date"></div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeAddModal()">취소</button>
       <button class="btn btn-primary" onclick="submitAdd()">추가</button>
@@ -200,6 +228,7 @@ textarea { resize: vertical; min-height: 70px; }
   </div>
 </div>
 
+<!-- 상세 패널 -->
 <div id="detail-panel">
   <div class="panel-header">
     <h2 id="panel-title">-</h2>
@@ -209,438 +238,580 @@ textarea { resize: vertical; min-height: 70px; }
 </div>
 
 <script>
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyu2pRScWpq3WhsK9aA7WhEXWYlGvA_0YiG4xuX8YmBP34A8BX9dUph2QgcfbuLGdo/exec';
+const SCRIPT_URL='https://script.google.com/macros/s/AKfycbyu2pRScWpq3WhsK9aA7WhEXWYlGvA_0YiG4xuX8YmBP34A8BX9dUph2QgcfbuLGdo/exec';
 
-const STAGES = [
-  { id: 0, name: '모집됨',         color: '#6c757d' },
-  { id: 1, name: '협찬대상 선정',   color: '#fd7e14' },
-  { id: 2, name: 'DM 발송',        color: '#0dcaf0' },
-  { id: 3, name: '진행의사 확인',   color: '#ffc107' },
-  { id: 4, name: '계약완료',        color: '#20c997' },
-  { id: 5, name: '제품발송',        color: '#3b82f6' },
-  { id: 6, name: '영상완료',        color: '#a855f7' },
-  { id: 7, name: '광고세팅/입금',   color: '#ec4899' },
-  { id: 8, name: '완료',            color: '#22c55e' },
+// 단계 정의 (협찬대상 선정 제거, 완료 제거)
+const STAGES=[
+  {id:0,name:'모집됨',color:'#6c757d'},
+  {id:2,name:'DM 발송',color:'#0dcaf0'},
+  {id:3,name:'진행의사 확인',color:'#ffc107'},
+  {id:4,name:'계약완료',color:'#20c997'},
+  {id:5,name:'제품발송',color:'#3b82f6'},
+  {id:6,name:'영상완료',color:'#a855f7'},
+  {id:7,name:'광고세팅/입금',color:'#ec4899'},
 ];
 
-let influencers = [], selectedId = null, currentFilter = 'all';
+let influencers=[],selectedId=null,currentFilter='all';
+let selectedIds=new Set();
+const uploadedFiles={};
 
-// ── 날짜 포맷 ──
-function formatDate(d) {
-  if (!d) return '-';
-  const s = String(d).trim();
-  if (!s || s === 'undefined' || s === 'null') return '-';
-  return s.length >= 10 ? s.slice(0, 10) : s;
+// 다음 단계 ID
+function getNextStageId(s){
+  const n=Number(s);
+  if(n<=1)return 2;
+  if(n===2)return 3;
+  if(n===3)return 4;
+  if(n===4)return 5;
+  if(n===5)return 6;
+  return null; // 6→completeAll(done)
 }
 
-function formatFollowers(n) {
-  const num = parseInt(String(n).replace(/[^0-9]/g, ''));
-  if (isNaN(num)) return n;
-  if (num >= 10000) return (num/10000).toFixed(1) + '만';
-  if (num >= 1000) return (num/1000).toFixed(1) + '천';
+// 단계 표시 정보 (레거시 stage 1 → stage 0으로 표시)
+function getStageInfo(stageId){
+  const s=Number(stageId);
+  const d=s===1?0:s;
+  return STAGES.find(st=>st.id===d)||{name:'알 수 없음',color:'#888'};
+}
+
+function formatDate(d){
+  if(!d)return'-';
+  const s=String(d).trim();
+  if(!s||s==='undefined'||s==='null')return'-';
+  return s.length>=10?s.slice(0,10):s;
+}
+function formatFollowers(n){
+  const num=parseInt(String(n).replace(/[^0-9]/g,''));
+  if(isNaN(num))return n;
+  if(num>=10000)return(num/10000).toFixed(1)+'만';
+  if(num>=1000)return(num/1000).toFixed(1)+'천';
   return String(num);
 }
 
-// ── 로딩바 ──
-function showLoading() {
-  const b = document.getElementById('loading-bar');
-  b.className = 'active';
-}
-function hideLoading() {
-  const b = document.getElementById('loading-bar');
-  b.className = 'done';
-  setTimeout(() => b.className = '', 400);
-}
+// 로딩바
+function showLoading(){document.getElementById('loading-bar').className='active'}
+function hideLoading(){const b=document.getElementById('loading-bar');b.className='done';setTimeout(()=>b.className='',400)}
+let syncCount=0;
+function syncStart(){syncCount++;document.getElementById('sync-badge').classList.add('show')}
+function syncEnd(){syncCount=Math.max(0,syncCount-1);if(!syncCount)document.getElementById('sync-badge').classList.remove('show')}
 
-// ── 동기화 뱃지 ──
-let syncCount = 0;
-function syncStart() { syncCount++; document.getElementById('sync-badge').classList.add('show'); }
-function syncEnd() { syncCount = Math.max(0, syncCount-1); if (!syncCount) document.getElementById('sync-badge').classList.remove('show'); }
-
-// ── API ──
-async function api(action, data) {
-  try {
-    const url = new URL(SCRIPT_URL);
-    url.searchParams.set('action', action);
-    if (data) url.searchParams.set('data', JSON.stringify(data));
-    const res = await fetch(url.toString());
+// API
+async function api(action,data){
+  try{
+    const url=new URL(SCRIPT_URL);
+    url.searchParams.set('action',action);
+    if(data)url.searchParams.set('data',JSON.stringify(data));
+    const res=await fetch(url.toString());
     return await res.json();
-  } catch (e) {
-    console.error('API 오류:', e);
-    return { success: false, error: e.message };
+  }catch(e){return{success:false,error:e.message}}
+}
+
+// 파일 업로드 (Drive via POST)
+async function uploadToDrive(file,label){
+  return new Promise(resolve=>{
+    const reader=new FileReader();
+    reader.onload=async(e)=>{
+      try{
+        const base64Data=e.target.result.split(',')[1];
+        const res=await fetch(SCRIPT_URL,{
+          method:'POST',
+          headers:{'Content-Type':'text/plain'},
+          body:JSON.stringify({action:'uploadFile',fileName:label+'_'+Date.now()+'_'+file.name,mimeType:file.type||'application/octet-stream',base64Data})
+        });
+        const r=await res.json();
+        resolve(r.success?r.url:null);
+      }catch{resolve(null)}
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handleFileSelect(inputId,statusId,label){
+  const input=document.getElementById(inputId);
+  const status=document.getElementById(statusId);
+  if(!input||!input.files[0])return;
+  status.textContent='업로드 중...';status.className='file-status';
+  const url=await uploadToDrive(input.files[0],label);
+  if(url){
+    uploadedFiles[inputId]=url;
+    status.innerHTML='✓ <a href="'+url+'" target="_blank" style="color:var(--success)">업로드 완료</a>';
+    status.className='file-status ok';
+  }else{
+    status.textContent='✗ 업로드 실패';status.className='file-status err';
   }
 }
 
-// ── 로컬 state 헬퍼 ──
-function localGet(id) { return influencers.find(i => String(i.id) === String(id)); }
-function localUpdate(id, changes) { const inf = localGet(id); if (inf) Object.assign(inf, changes); }
-function localRemove(id) { influencers = influencers.filter(i => String(i.id) !== String(id)); }
-function localAdd(item) { influencers.unshift(item); }
+// 로컬 상태 헬퍼
+function localGet(id){return influencers.find(i=>String(i.id)===String(id))}
+function localUpdate(id,changes){const inf=localGet(id);if(inf)Object.assign(inf,changes)}
+function localRemove(id){influencers=influencers.filter(i=>String(i.id)!==String(id))}
+function localAdd(item){influencers.unshift(item)}
 
-// ── 초기 로드 ──
-window.onload = () => {
-  document.getElementById('add-recruited-date').value = new Date().toISOString().split('T')[0];
-  setThisMonth();
-  showLoading();
-  api('getAll').then(result => {
-    hideLoading();
-    if (result.success) {
-      influencers = result.data.filter(r => r.status !== 'deleted');
-      render();
-    }
-  });
+// 초기 로드
+window.onload=()=>{
+  document.getElementById('add-recruited-date').value=new Date().toISOString().split('T')[0];
+  setThisMonth();showLoading();
+  api('getAll').then(r=>{hideLoading();if(r.success){influencers=r.data.filter(d=>d.status!=='deleted');render()}});
 };
 
-function switchTab(name, btn) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
-  document.getElementById('tab-' + name).classList.add('active');
-  btn.classList.add('active');
-  closePanel();
-  if (name === 'settlement') renderSettlement();
+function switchTab(name,btn){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  btn.classList.add('active');closePanel();
+  if(name==='settlement')renderSettlement();
 }
 
-function render() { renderDashboard(); renderFilterTabs(); renderList(); }
+function render(){renderDashboard();renderFilterTabs();renderList()}
 
-function renderDashboard() {
-  const active = influencers.filter(i => i.status === 'active');
-  const rejected = influencers.filter(i => i.status === 'rejected');
-  let html = '';
-  STAGES.forEach(s => {
-    const count = active.filter(i => Number(i.stage) === s.id).length;
-    html += `<div class="card" style="border-top:3px solid ${s.color}" onclick="jumpToFilter(${s.id})"><div class="card-count" style="color:${s.color}">${count}</div><div class="card-label">${s.name}</div></div>`;
+// 대시보드
+function renderDashboard(){
+  const active=influencers.filter(i=>i.status==='active');
+  const rejected=influencers.filter(i=>i.status==='rejected');
+  let html='';
+  STAGES.forEach(s=>{
+    const count=s.id===0
+      ?active.filter(i=>Number(i.stage)===0||Number(i.stage)===1).length
+      :active.filter(i=>Number(i.stage)===s.id).length;
+    html+=`<div class="card" style="border-top:3px solid ${s.color}" onclick="jumpToFilter(${s.id})"><div class="card-count" style="color:${s.color}">${count}</div><div class="card-label">${s.name}</div></div>`;
   });
-  html += `<div class="card" style="border-top:3px solid #e74c3c"><div class="card-count" style="color:#e74c3c">${rejected.length}</div><div class="card-label">거절됨</div></div>`;
-  document.getElementById('stage-cards').innerHTML = html;
+  html+=`<div class="card" style="border-top:3px solid #e74c3c"><div class="card-count" style="color:#e74c3c">${rejected.length}</div><div class="card-label">거절됨</div></div>`;
+  document.getElementById('stage-cards').innerHTML=html;
 
-  const bossItems = active.filter(i => Number(i.stage) === 0 || Number(i.stage) === 6);
-  document.getElementById('boss-todo').innerHTML = bossItems.length === 0
-    ? '<div class="text-muted" style="padding:8px 0">할 일 없음 ✓</div>'
-    : bossItems.map(i => { const s = STAGES[Number(i.stage)]; return `<div class="todo-item" onclick="openDetail('${i.id}')"><span class="todo-name">@${i.instagram_id||i.nickname}</span><span class="todo-stage" style="background:${s.color}22;color:${s.color}">${s.name}</span></div>`; }).join('');
+  // 내 할 일: stage 6 (영상완료 → 광고세팅/입금)
+  const bossItems=active.filter(i=>Number(i.stage)===6);
+  document.getElementById('boss-todo').innerHTML=bossItems.length===0
+    ?'<div class="text-muted" style="padding:6px 0">할 일 없음 ✓</div>'
+    :bossItems.map(i=>{const s=getStageInfo(i.stage);return`<div class="todo-item" onclick="openDetail('${i.id}')"><span class="todo-name">@${i.instagram_id||i.nickname}</span><div class="todo-right"><span class="todo-stage" style="background:${s.color}22;color:${s.color}">${s.name}</span><button class="btn btn-outline btn-sm" onclick="quickAdvance('${i.id}',event)" style="padding:2px 7px">→</button></div></div>`}).join('');
 
-  const partItems = active.filter(i => Number(i.stage) >= 1 && Number(i.stage) <= 5);
-  document.getElementById('part-todo').innerHTML = partItems.length === 0
-    ? '<div class="text-muted" style="padding:8px 0">할 일 없음 ✓</div>'
-    : partItems.map(i => { const s = STAGES[Number(i.stage)]; return `<div class="todo-item" onclick="openDetail('${i.id}')"><span class="todo-name">@${i.instagram_id||i.nickname}</span><span class="todo-stage" style="background:${s.color}22;color:${s.color}">${s.name}</span></div>`; }).join('');
+  // 아르바이트 할 일: stages 0-5 (stage 1 포함 레거시)
+  const partItems=active.filter(i=>{const s=Number(i.stage);return s>=0&&s<=5});
+  document.getElementById('part-todo').innerHTML=partItems.length===0
+    ?'<div class="text-muted" style="padding:6px 0">할 일 없음 ✓</div>'
+    :partItems.map(i=>{const s=getStageInfo(i.stage);const canAdv=getNextStageId(Number(i.stage))!==null;return`<div class="todo-item" onclick="openDetail('${i.id}')"><span class="todo-name">@${i.instagram_id||i.nickname}</span><div class="todo-right"><span class="todo-stage" style="background:${s.color}22;color:${s.color}">${s.name}</span>${canAdv?`<button class="btn btn-outline btn-sm" onclick="quickAdvance('${i.id}',event)" style="padding:2px 7px">→</button>`:''}</div></div>`}).join('');
 }
 
-function renderFilterTabs() {
-  const active = influencers.filter(i => i.status === 'active');
-  let html = `<div class="filter-tab ${currentFilter==='all'?'active':''}" onclick="setFilter('all')">전체 (${active.length})</div>`;
-  STAGES.forEach(s => {
-    const count = active.filter(i => Number(i.stage) === s.id).length;
-    html += `<div class="filter-tab ${currentFilter===s.id?'active':''}" onclick="setFilter(${s.id})">${s.name} (${count})</div>`;
+// 필터 탭
+function renderFilterTabs(){
+  const active=influencers.filter(i=>i.status==='active');
+  let html=`<div class="filter-tab ${currentFilter==='all'?'active':''}" onclick="setFilter('all')">전체 (${active.length})</div>`;
+  STAGES.forEach(s=>{
+    const count=s.id===0
+      ?active.filter(i=>Number(i.stage)===0||Number(i.stage)===1).length
+      :active.filter(i=>Number(i.stage)===s.id).length;
+    html+=`<div class="filter-tab ${currentFilter===s.id?'active':''}" onclick="setFilter(${s.id})">${s.name} (${count})</div>`;
   });
-  const rejCount = influencers.filter(i => i.status === 'rejected').length;
-  html += `<div class="filter-tab ${currentFilter==='rejected'?'active':''}" onclick="setFilter('rejected')">거절됨 (${rejCount})</div>`;
-  const doneCount = influencers.filter(i => i.status === 'done').length;
-  html += `<div class="filter-tab ${currentFilter==='done'?'active':''}" onclick="setFilter('done')">완료됨 (${doneCount})</div>`;
-  document.getElementById('filter-tabs').innerHTML = html;
+  const rejCount=influencers.filter(i=>i.status==='rejected').length;
+  html+=`<div class="filter-tab ${currentFilter==='rejected'?'active':''}" onclick="setFilter('rejected')">거절됨 (${rejCount})</div>`;
+  const doneCount=influencers.filter(i=>i.status==='done').length;
+  html+=`<div class="filter-tab ${currentFilter==='done'?'active':''}" onclick="setFilter('done')">완료됨 (${doneCount})</div>`;
+  document.getElementById('filter-tabs').innerHTML=html;
 }
 
-function setFilter(f) { currentFilter = f; renderFilterTabs(); renderList(); }
-function jumpToFilter(id) { switchTab('management', document.querySelectorAll('nav button')[1]); setFilter(id); }
+function setFilter(f){currentFilter=f;renderFilterTabs();renderList()}
+function jumpToFilter(id){switchTab('management',document.querySelectorAll('nav button')[1]);setFilter(id)}
 
-function renderList() {
-  const search = (document.getElementById('search-input').value || '').toLowerCase();
-  let list = currentFilter === 'rejected' ? influencers.filter(i => i.status === 'rejected')
-    : currentFilter === 'done' ? influencers.filter(i => i.status === 'done')
-    : currentFilter !== 'all' ? influencers.filter(i => i.status === 'active' && Number(i.stage) === currentFilter)
-    : influencers.filter(i => i.status === 'active');
-  if (search) list = list.filter(i => (i.instagram_id||'').toLowerCase().includes(search) || (i.name||'').toLowerCase().includes(search));
-  const tbody = document.getElementById('influencer-table');
-  if (list.length === 0) { tbody.innerHTML = `<tr><td colspan="6"><div class="empty">인플루언서가 없습니다.</div></td></tr>`; return; }
-  tbody.innerHTML = list.map(i => {
-    const stage = i.status === 'rejected' ? {name:'거절됨',color:'#e74c3c'}
-      : i.status === 'done' ? {name:'완료됨',color:'#22c55e'}
-      : STAGES[Number(i.stage)] || STAGES[0];
-    const isOpt = i._optimistic ? 'optimistic' : '';
-    return `<tr class="${String(selectedId)===String(i.id)?'selected':''} ${isOpt}" onclick="openDetail('${i.id}')">
+function getFilteredList(){
+  const search=(document.getElementById('search-input').value||'').toLowerCase();
+  let list;
+  if(currentFilter==='rejected')list=influencers.filter(i=>i.status==='rejected');
+  else if(currentFilter==='done')list=influencers.filter(i=>i.status==='done');
+  else if(currentFilter!=='all'){
+    list=currentFilter===0
+      ?influencers.filter(i=>i.status==='active'&&(Number(i.stage)===0||Number(i.stage)===1))
+      :influencers.filter(i=>i.status==='active'&&Number(i.stage)===currentFilter);
+  }else list=influencers.filter(i=>i.status==='active');
+  if(search)list=list.filter(i=>(i.instagram_id||'').toLowerCase().includes(search)||(i.name||'').toLowerCase().includes(search));
+  return list;
+}
+
+function renderList(){
+  const list=getFilteredList();
+  const tbody=document.getElementById('influencer-table');
+  if(list.length===0){tbody.innerHTML=`<tr><td colspan="7"><div class="empty">인플루언서가 없습니다.</div></td></tr>`;return}
+  tbody.innerHTML=list.map(i=>{
+    const si=i.status==='rejected'?{name:'거절됨',color:'#e74c3c'}:i.status==='done'?{name:'완료됨',color:'#22c55e'}:getStageInfo(i.stage);
+    const canAdv=i.status==='active'&&getNextStageId(Number(i.stage))!==null;
+    const isChecked=selectedIds.has(String(i.id));
+    return`<tr class="${String(selectedId)===String(i.id)?'selected':''} ${i._opt?'optimistic':''}" onclick="openDetail('${i.id}')">
+      <td onclick="event.stopPropagation()"><input type="checkbox" ${isChecked?'checked':''} onchange="toggleSelect('${i.id}',event)"></td>
       <td><b>@${i.instagram_id||i.nickname||'-'}</b></td>
       <td>${i.name||'-'}</td>
-      <td class="followers-text">${i.followers?formatFollowers(i.followers):'-'}</td>
-      <td class="followers-text">${formatDate(i.recruited_date)}</td>
-      <td><span class="stage-badge" style="background:${stage.color}22;color:${stage.color}">${stage.name}</span></td>
-      <td>${i.reels_url?`<a class="link-btn" href="${i.reels_url}" target="_blank" onclick="event.stopPropagation()">릴스 ↗</a>`:'-'}</td>
+      <td class="muted">${i.followers?formatFollowers(i.followers):'-'}</td>
+      <td class="muted">${formatDate(i.recruited_date)}</td>
+      <td><span class="stage-badge" style="background:${si.color}22;color:${si.color}">${si.name}</span></td>
+      <td onclick="event.stopPropagation()" style="white-space:nowrap">
+        ${i.reels_url?`<a class="link-btn" href="${i.reels_url}" target="_blank">릴스↗</a> `:''}
+        ${canAdv?`<button class="btn btn-outline btn-sm" onclick="quickAdvance('${i.id}',event)" style="padding:3px 8px">→</button>`:''}
+      </td>
     </tr>`;
   }).join('');
+  // 전체선택 체크박스 상태
+  const selectAll=document.getElementById('select-all');
+  if(selectAll){const allChecked=list.length>0&&list.every(i=>selectedIds.has(String(i.id)));selectAll.checked=allChecked;selectAll.indeterminate=!allChecked&&list.some(i=>selectedIds.has(String(i.id)))}
 }
 
-// ── Add Modal ──
-function openAddModal() {
-  ['insta-url','add-instagram-id','add-reels-url','add-name','add-followers'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('add-recruited-date').value = new Date().toISOString().split('T')[0];
+// 전체선택
+function toggleSelectAll(e){
+  const list=getFilteredList();
+  if(e.target.checked)list.forEach(i=>selectedIds.add(String(i.id)));
+  else list.forEach(i=>selectedIds.delete(String(i.id)));
+  updateBulkBar();renderList();
+}
+function toggleSelect(id,e){
+  e.stopPropagation();
+  if(selectedIds.has(String(id)))selectedIds.delete(String(id));
+  else selectedIds.add(String(id));
+  updateBulkBar();renderList();
+}
+function updateBulkBar(){
+  const n=selectedIds.size;
+  document.getElementById('bulk-bar').classList.toggle('show',n>0);
+  document.getElementById('bulk-count').textContent=n+'개 선택됨';
+}
+function clearSelection(){selectedIds.clear();updateBulkBar();renderList()}
+
+// 일괄 다음 단계
+async function bulkAdvance(){
+  const ids=[...selectedIds];
+  const backups={};
+  ids.forEach(id=>{
+    const inf=localGet(id);
+    if(!inf||inf.status!=='active')return;
+    const next=getNextStageId(Number(inf.stage));
+    if(next!==null){backups[id]={stage:inf.stage};localUpdate(id,{stage:next})}
+  });
+  selectedIds.clear();updateBulkBar();render();
+  syncStart();
+  await Promise.all(ids.map(id=>{const inf=localGet(id);return inf?api('update',{id,stage:inf.stage}):Promise.resolve({success:true})}));
+  syncEnd();
+}
+
+// 일괄 거절
+async function bulkReject(){
+  if(!confirm(selectedIds.size+'개를 거절 처리할까요?'))return;
+  const ids=[...selectedIds];
+  ids.forEach(id=>{const inf=localGet(id);if(inf&&inf.status==='active')localUpdate(id,{status:'rejected'})});
+  selectedIds.clear();updateBulkBar();render();
+  syncStart();
+  await Promise.all(ids.map(id=>api('update',{id,status:'rejected'})));
+  syncEnd();
+}
+
+// 빠른 다음 단계
+async function quickAdvance(id,e){
+  if(e)e.stopPropagation();
+  const inf=localGet(id);
+  if(!inf||inf.status!=='active')return;
+  const next=getNextStageId(Number(inf.stage));
+  if(next===null)return;
+  const prev=Number(inf.stage);
+  localUpdate(id,{stage:next});
+  render();if(String(selectedId)===String(id))renderPanel();
+  syncStart();
+  const r=await api('update',{id,stage:next});
+  syncEnd();
+  if(!r.success){localUpdate(id,{stage:prev});render();alert('저장 실패: '+r.error)}
+}
+
+// 추가 모달
+function openAddModal(){
+  ['insta-url','add-instagram-id','add-reels-url','add-name','add-followers'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('add-recruited-date').value=new Date().toISOString().split('T')[0];
   document.getElementById('add-overlay').classList.add('open');
 }
-function closeAddModal(e) { if (!e || e.target === document.getElementById('add-overlay')) document.getElementById('add-overlay').classList.remove('open'); }
-function parseUrl() {
-  const match = document.getElementById('insta-url').value.trim().match(/instagram\.com\/([^\/\?]+)/);
-  if (match) { const u = match[1]; document.getElementById('add-instagram-id').value = u; document.getElementById('add-reels-url').value = `https://www.instagram.com/${u}/reels/`; }
+function closeAddModal(e){if(!e||e.target===document.getElementById('add-overlay'))document.getElementById('add-overlay').classList.remove('open')}
+function parseUrl(){
+  const m=document.getElementById('insta-url').value.trim().match(/instagram\.com\/([^\/\?]+)/);
+  if(m){const u=m[1];document.getElementById('add-instagram-id').value=u;document.getElementById('add-reels-url').value=`https://www.instagram.com/${u}/reels/`}
+}
+async function submitAdd(){
+  const instagram_id=document.getElementById('add-instagram-id').value.trim();
+  if(!instagram_id)return alert('URL을 먼저 입력해주세요.');
+  const tempId='temp_'+Date.now();
+  const item={id:tempId,_opt:true,instagram_id,nickname:instagram_id,name:document.getElementById('add-name').value.trim(),followers:document.getElementById('add-followers').value.trim(),reels_url:document.getElementById('add-reels-url').value.trim(),recruited_date:document.getElementById('add-recruited-date').value,stage:0,status:'active',memo:''};
+  localAdd(item);closeAddModal();render();
+  syncStart();const r=await api('add',item);syncEnd();
+  if(r.success){localUpdate(tempId,{id:r.id,_opt:false});render()}
+  else{localRemove(tempId);render();alert('추가 실패: '+r.error)}
 }
 
-// ★ Optimistic Add
-async function submitAdd() {
-  const instagram_id = document.getElementById('add-instagram-id').value.trim();
-  if (!instagram_id) return alert('URL을 먼저 입력해주세요.');
+// 패널
+function openDetail(id){selectedId=String(id);renderList();renderPanel();document.getElementById('detail-panel').classList.add('open')}
+function closePanel(){selectedId=null;document.getElementById('detail-panel').classList.remove('open');renderList()}
 
-  const tempId = 'temp_' + Date.now();
-  const newItem = {
-    id: tempId, _optimistic: true,
-    instagram_id, nickname: instagram_id,
-    name: document.getElementById('add-name').value.trim(),
-    followers: document.getElementById('add-followers').value.trim(),
-    reels_url: document.getElementById('add-reels-url').value.trim(),
-    recruited_date: document.getElementById('add-recruited-date').value,
-    stage: 0, status: 'active', memo: ''
-  };
+function renderPanel(){
+  const inf=localGet(selectedId);if(!inf)return;
+  const stage=Number(inf.stage);
+  document.getElementById('panel-title').textContent='@'+(inf.instagram_id||inf.nickname);
+  const today=new Date().toISOString().split('T')[0];
+  const df={2:'dm_sent_date',4:'contract_sent_date',5:'product_sent_date',7:'ad_setup_date'};
 
-  // 즉시 화면 반영
-  localAdd(newItem);
-  closeAddModal();
-  render();
-
-  // 백그라운드 저장
-  syncStart();
-  const result = await api('add', newItem);
-  syncEnd();
-
-  if (result.success) {
-    // 임시 ID → 실제 ID로 교체
-    localUpdate(tempId, { id: result.id, _optimistic: false });
-    selectedId = result.id; // 선택 상태 업데이트
-    render();
-  } else {
-    // 실패 시 롤백
-    localRemove(tempId);
-    render();
-    alert('추가 실패: ' + result.error);
-  }
-}
-
-// ── Detail Panel ──
-function openDetail(id) {
-  selectedId = String(id);
-  renderList();
-  renderPanel();
-  document.getElementById('detail-panel').classList.add('open');
-}
-function closePanel() {
-  selectedId = null;
-  document.getElementById('detail-panel').classList.remove('open');
-  renderList();
-}
-
-function renderPanel() {
-  const inf = localGet(selectedId);
-  if (!inf) return;
-  const stage = Number(inf.stage);
-  document.getElementById('panel-title').textContent = '@' + (inf.instagram_id || inf.nickname);
-
-  const dateFields = [null, null, 'dm_sent_date', null, 'contract_sent_date', 'product_sent_date', null, 'ad_setup_date', 'payment_date'];
-
-  let tlHtml = '<div class="section-title">진행 단계</div><div class="timeline">';
-  STAGES.forEach((s, idx) => {
-    let dc = idx < stage ? 'done' : idx === stage ? 'current' : 'pending';
-    if (inf.status === 'rejected') dc = idx < stage ? 'done' : 'pending';
-    if (inf.status === 'done') dc = 'done';
-    const lc = idx < stage ? 'done' : idx === stage ? 'current' : '';
-    const df = dateFields[idx];
-    const dv = formatDate(df ? inf[df] : (idx === 0 ? inf.recruited_date : ''));
-    tlHtml += `<div class="timeline-item"><div class="timeline-dot ${dc}">${(idx < stage || inf.status === 'done') ? '✓' : idx+1}</div><div class="timeline-label ${lc}">${s.name}${dv !== '-' ? `<span class="timeline-date">${dv}</span>` : ''}</div></div>`;
-    if (idx < STAGES.length - 1) tlHtml += '<div class="timeline-line"></div>';
+  // 타임라인
+  let tlHtml='<div class="section-title">진행 단계</div><div class="timeline">';
+  STAGES.forEach((s,idx)=>{
+    let dc=s.id<stage?'done':s.id===stage?'current':'pending';
+    if(inf.status==='rejected')dc=s.id<stage?'done':'pending';
+    if(inf.status==='done')dc='done';
+    const lc=s.id<stage?'done':s.id===stage?'current':'';
+    const dv=formatDate(df[s.id]?inf[df[s.id]]:(s.id===0?inf.recruited_date:''));
+    tlHtml+=`<div class="tl-item"><div class="tl-dot ${dc}">${(s.id<stage||inf.status==='done')?'✓':idx+1}</div><div class="tl-label ${lc}">${s.name}${dv!=='-'?`<span class="tl-date">${dv}</span>`:''}</div></div>`;
+    if(idx<STAGES.length-1)tlHtml+='<div class="tl-line"></div>';
   });
-  if (inf.status === 'rejected') tlHtml += '<div class="timeline-item"><div class="timeline-dot" style="background:#e74c3c;color:#fff">✕</div><div class="timeline-label" style="color:#e74c3c">거절됨</div></div>';
-  tlHtml += '</div>';
+  if(inf.status==='rejected')tlHtml+='<div class="tl-item"><div class="tl-dot" style="background:#e74c3c;color:#fff">✕</div><div class="tl-label" style="color:#e74c3c">거절됨</div></div>';
+  tlHtml+='</div>';
 
-  const rv = formatDate(inf.recruited_date);
-  const infoHtml = `<div class="section-title">기본 정보</div>
-    <div class="form-group"><label>이름</label><input type="text" id="p-name" value="${inf.name||''}"></div>
-    <div class="form-group"><label>팔로워 수</label><input type="text" id="p-followers" value="${inf.followers||''}"></div>
-    <div class="form-group"><label>모집일</label><input type="date" id="p-recruited" value="${rv !== '-' ? rv : ''}"></div>
-    <div class="form-group"><label>메모</label><textarea id="p-memo">${inf.memo||''}</textarea></div>
+  // 기본 정보
+  const rv=formatDate(inf.recruited_date);
+  const infoHtml=`<div class="section-title">기본 정보</div>
+    <div class="fg"><label>이름 (별칭)</label><input type="text" id="p-name" value="${inf.name||''}"></div>
+    <div class="fg"><label>실명 (계약/입금용)</label><input type="text" id="p-inf-name" value="${inf.influencer_name||''}"></div>
+    <div class="fg"><label>연락처</label><input type="tel" id="p-phone" value="${inf.phone||''}" placeholder="010-0000-0000"></div>
+    <div class="fg"><label>팔로워 수</label><input type="text" id="p-followers" value="${inf.followers||''}"></div>
+    <div class="fg"><label>모집일</label><input type="date" id="p-recruited" value="${rv!=='-'?rv:''}"></div>
+    <div class="fg"><label>메모</label><textarea id="p-memo">${inf.memo||''}</textarea></div>
     <div class="info-row">
-      <button class="btn btn-outline btn-sm" onclick="saveBasicInfo()">기본 정보 저장</button>
+      <button class="btn btn-outline btn-sm" onclick="saveBasicInfo()">저장</button>
       <button class="btn btn-danger btn-sm" onclick="deleteInfluencer()">🗑 삭제</button>
     </div>
     <hr class="divider">`;
 
-  let actionHtml = '<div class="section-title">단계 액션</div>';
-  const today = new Date().toISOString().split('T')[0];
-  if (inf.status === 'rejected') {
-    actionHtml += `<p class="text-muted" style="margin-bottom:12px">거절 처리된 인플루언서입니다.</p><button class="btn btn-outline btn-sm" onclick="restoreInfluencer()">↩ 복구 (모집됨으로)</button>`;
-  } else if (inf.status === 'done') {
-    actionHtml += `<p style="color:#22c55e;font-weight:600;margin-bottom:8px">✓ 모든 단계 완료</p><p class="text-muted" style="font-size:12px">광고코드: ${inf.ad_code||'-'} / 계좌: ${inf.account_number||'-'} / 신분증: ${inf.id_received==='Y'?'수령완료':'미수령'}</p>`;
-  } else if (stage === 0) {
-    actionHtml += `<p class="text-muted" style="margin-bottom:12px">협찬 대상으로 선정하면 아르바이트가 DM 발송을 진행합니다.</p><div class="btn-group"><button class="btn btn-success" onclick="advanceStage()">✓ 협찬 대상으로 선정</button><button class="btn btn-danger btn-sm" onclick="rejectInfluencer()">거절</button></div>`;
-  } else if (stage === 1) {
-    const v = formatDate(inf.dm_sent_date); actionHtml += `<p class="text-muted" style="margin-bottom:12px">아르바이트가 DM을 발송하면 다음 단계로 이동해주세요.</p><div class="form-group"><label>DM 발송일</label><input type="date" id="p-dm-date" value="${v!=='-'?v:today}"></div><button class="btn btn-primary" onclick="advanceWithDate('dm_sent_date','p-dm-date')">DM 발송 완료</button>`;
-  } else if (stage === 2) {
-    actionHtml += `<p class="text-muted" style="margin-bottom:12px">진행 의사를 확인해주세요.</p><div class="btn-group"><button class="btn btn-success" onclick="advanceStage()">✓ 진행 의사 있음</button><button class="btn btn-danger btn-sm" onclick="rejectInfluencer()">거절 (진행 의사 없음)</button></div>`;
-  } else if (stage === 3) {
-    const v = formatDate(inf.contract_sent_date); actionHtml += `<p class="text-muted" style="margin-bottom:12px">계약서를 발송하고 완료되면 체크해주세요.</p><div class="form-group"><label>계약서 발송일</label><input type="date" id="p-contract-date" value="${v!=='-'?v:today}"></div><button class="btn btn-primary" onclick="advanceWithDate('contract_sent_date','p-contract-date')">계약서 발송 완료</button>`;
-  } else if (stage === 4) {
-    const v = formatDate(inf.product_sent_date); actionHtml += `<p class="text-muted" style="margin-bottom:12px">제품을 발송해주세요.</p><div class="form-group"><label>제품 발송일</label><input type="date" id="p-product-date" value="${v!=='-'?v:today}"></div><button class="btn btn-primary" onclick="advanceWithDate('product_sent_date','p-product-date')">제품 발송 완료</button>`;
-  } else if (stage === 5) {
-    actionHtml += `<p class="text-muted" style="margin-bottom:12px">영상 완료 후 아래 정보를 수집해주세요.</p><div class="form-group"><label>광고 코드</label><input type="text" id="p-ad-code" value="${inf.ad_code||''}" placeholder="광고 코드 입력"></div><div class="form-group"><label>계좌번호</label><input type="text" id="p-account" value="${inf.account_number||''}" placeholder="은행명 + 계좌번호"></div><div class="checkbox-row"><input type="checkbox" id="p-id-received" ${inf.id_received==='Y'?'checked':''}><label for="p-id-received">신분증 수령 완료</label></div><button class="btn btn-primary mt-12" onclick="saveVideoInfo()">저장 후 다음 단계로</button>`;
-  } else if (stage === 6) {
-    const vs = formatDate(inf.ad_setup_date), vp = formatDate(inf.payment_date);
-    actionHtml += `<p class="text-muted" style="margin-bottom:12px">광고 세팅 및 인플루언서 입금을 진행해주세요.</p><div class="form-group"><label>광고세팅 완료일</label><input type="date" id="p-ad-setup-date" value="${vs!=='-'?vs:today}"></div><div class="form-group"><label>입금일</label><input type="date" id="p-payment-date" value="${vp!=='-'?vp:today}"></div><button class="btn btn-success" onclick="completeAll()">✓ 광고세팅 및 입금 완료</button>`;
-  } else {
-    actionHtml += `<p style="color:#22c55e;font-weight:600;margin-bottom:8px">✓ 모든 단계 완료</p><p class="text-muted" style="font-size:12px">광고코드: ${inf.ad_code||'-'} / 계좌: ${inf.account_number||'-'} / 신분증: ${inf.id_received==='Y'?'수령완료':'미수령'}</p>`;
+  // 단계 액션
+  let actionHtml='<div class="section-title">단계 액션</div>';
+  if(inf.status==='rejected'){
+    actionHtml+=`<p class="text-muted" style="margin-bottom:10px">거절 처리된 인플루언서입니다.</p><button class="btn btn-outline btn-sm" onclick="restoreInfluencer()">↩ 복구</button>`;
+  }else if(inf.status==='done'){
+    actionHtml+=`<p style="color:#22c55e;font-weight:600;margin-bottom:6px">✓ 모든 단계 완료</p>
+    <p class="text-muted">광고코드: ${inf.ad_code||'-'} / 신분증: ${inf.id_received==='Y'||inf.product_only==='Y'?'완료':'미완료'}</p>
+    ${inf.contract_file?`<div style="margin-top:6px"><a href="${inf.contract_file}" target="_blank" class="link-btn">📎 계약서 보기</a></div>`:''}
+    ${inf.special_note?`<p class="text-muted" style="margin-top:6px">특이사항: ${inf.special_note}</p>`:''}`;
+  }else if(stage===0||stage===1){
+    // stage 1은 레거시 (협찬대상 선정 제거됨)
+    actionHtml+=`<p class="text-muted" style="margin-bottom:10px">DM 발송 준비가 완료되면 다음 단계로 이동하세요.</p>
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="advanceStage()">▶ DM 발송으로 이동</button>
+      <button class="btn btn-danger btn-sm" onclick="rejectInfluencer()">✕ 거절됨으로</button>
+    </div>`;
+  }else if(stage===2){
+    const v=formatDate(inf.dm_sent_date);
+    actionHtml+=`<div class="fg"><label>DM 발송일</label><input type="date" id="p-dm-date" value="${v!=='-'?v:today}"></div>
+    <button class="btn btn-primary" onclick="advanceWithDate('dm_sent_date','p-dm-date')">DM 발송 완료 →</button>`;
+  }else if(stage===3){
+    // 진행의사 확인: 이름 + 전화번호 수집
+    actionHtml+=`<p class="text-muted" style="margin-bottom:10px">진행 의사 확인 후 아래 정보를 수집해주세요.</p>
+    <div class="fg"><label>인플루언서 실명</label><input type="text" id="p-inf-name2" value="${inf.influencer_name||''}" placeholder="홍길동"></div>
+    <div class="fg"><label>연락처</label><input type="tel" id="p-phone2" value="${inf.phone||''}" placeholder="010-0000-0000"></div>
+    <div class="btn-group" style="margin-top:8px">
+      <button class="btn btn-success" onclick="confirmIntention()">✓ 진행 의사 있음</button>
+      <button class="btn btn-danger btn-sm" onclick="rejectInfluencer()">✕ 거절됨으로</button>
+    </div>`;
+  }else if(stage===4){
+    // 계약완료: 파일 업로드 + 특이사항
+    const v=formatDate(inf.contract_sent_date);
+    actionHtml+=`<div class="fg"><label>계약 완료일</label><input type="date" id="p-contract-date" value="${v!=='-'?v:today}"></div>
+    <div class="fg"><label>계약서 파일</label>
+      <input type="file" id="p-contract-file" accept=".pdf,.jpg,.jpeg,.png,.heic" onchange="handleFileSelect('p-contract-file','contract-status','계약서')">
+      <span id="contract-status" class="file-status">${inf.contract_file?`<a href="${inf.contract_file}" target="_blank" style="color:var(--success)">✓ 기존 파일 보기</a>`:''}</span>
+    </div>
+    <div class="fg"><label>특이사항 (진행 단가 등)</label><textarea id="p-special-note">${inf.special_note||''}</textarea></div>
+    <button class="btn btn-primary" onclick="completeContract()">계약 완료 →</button>`;
+  }else if(stage===5){
+    // 제품발송: 광고코드 + 제품만협찬 + 파일
+    const v=formatDate(inf.product_sent_date);
+    const isProductOnly=inf.product_only==='Y';
+    actionHtml+=`<div class="fg"><label>제품 발송일</label><input type="date" id="p-product-date" value="${v!=='-'?v:today}"></div>
+    <div class="fg"><label>광고 코드</label><input type="text" id="p-ad-code" value="${inf.ad_code||''}" placeholder="광고 코드 입력"></div>
+    <div class="cb-row" style="margin-bottom:10px">
+      <input type="checkbox" id="p-product-only" ${isProductOnly?'checked':''} onchange="toggleProductOnly(this.checked)">
+      <label for="p-product-only" style="font-size:13px">제품만 협찬 (통장사본/신분증 불필요)</label>
+    </div>
+    <div id="p-files-section" style="${isProductOnly?'display:none':''}">
+      <div class="fg"><label>통장사본</label>
+        <input type="file" id="p-bankbook-file" accept=".pdf,.jpg,.jpeg,.png,.heic" onchange="handleFileSelect('p-bankbook-file','bankbook-status','통장사본')">
+        <span id="bankbook-status" class="file-status">${inf.bankbook_file?`<a href="${inf.bankbook_file}" target="_blank" style="color:var(--success)">✓ 기존 파일 보기</a>`:''}</span>
+      </div>
+      <div class="fg"><label>신분증</label>
+        <input type="file" id="p-id-file" accept=".pdf,.jpg,.jpeg,.png,.heic" onchange="handleFileSelect('p-id-file','id-status','신분증')">
+        <span id="id-status" class="file-status">${inf.id_file?`<a href="${inf.id_file}" target="_blank" style="color:var(--success)">✓ 기존 파일 보기</a>`:''}</span>
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="completeProduct()">제품 발송 완료 →</button>`;
+  }else if(stage===6){
+    // 영상완료: 광고코드 복사 + 입금일
+    const vp=formatDate(inf.payment_date);
+    actionHtml+=`<p class="text-muted" style="margin-bottom:10px">광고 세팅 및 인플루언서 입금을 진행해주세요.</p>
+    <div class="fg"><label>광고코드 (복사용)</label>
+      <div class="copy-row">
+        <input type="text" value="${inf.ad_code||''}" readonly>
+        <button class="btn btn-outline btn-sm" onclick="copyText('${inf.ad_code||''}')">복사</button>
+      </div>
+    </div>
+    <div class="fg"><label>입금일</label><input type="date" id="p-payment-date" value="${vp!=='-'?vp:today}"></div>
+    <button class="btn btn-success" onclick="completeAll()">✓ 광고세팅 및 입금 완료</button>`;
+  }else{
+    actionHtml+=`<p style="color:#22c55e;font-weight:600">✓ 처리 완료</p>`;
   }
 
-  document.getElementById('panel-body').innerHTML = tlHtml + infoHtml + actionHtml;
+  document.getElementById('panel-body').innerHTML=tlHtml+infoHtml+actionHtml;
 }
 
-// ★ Optimistic 기본정보 저장
-async function saveBasicInfo() {
-  const name = document.getElementById('p-name').value;
-  const followers = document.getElementById('p-followers').value;
-  const recruited_date = document.getElementById('p-recruited').value;
-  const memo = document.getElementById('p-memo').value;
-  const backup = { ...localGet(selectedId) };
-
-  localUpdate(selectedId, { name, followers, recruited_date, memo });
-  renderPanel(); renderDashboard();
-
-  syncStart();
-  const r = await api('update', { id: selectedId, name, followers, recruited_date, memo });
-  syncEnd();
-  if (!r.success) { localUpdate(selectedId, backup); renderPanel(); alert('저장 실패: ' + r.error); }
+function toggleProductOnly(checked){
+  const sec=document.getElementById('p-files-section');
+  if(sec)sec.style.display=checked?'none':'';
+}
+function copyText(text){
+  if(!text||text==='-')return;
+  navigator.clipboard.writeText(text).then(()=>{
+    const btn=event.target;const orig=btn.textContent;btn.textContent='✓복사됨';setTimeout(()=>btn.textContent=orig,1500);
+  });
 }
 
-// ★ Optimistic 단계 이동
-async function advanceStage() {
-  const inf = localGet(selectedId);
-  const prev = Number(inf.stage), next = prev + 1;
-  localUpdate(selectedId, { stage: next });
-  render(); renderPanel();
-
-  syncStart();
-  const r = await api('update', { id: selectedId, stage: next });
-  syncEnd();
-  if (!r.success) { localUpdate(selectedId, { stage: prev }); render(); renderPanel(); alert('저장 실패: ' + r.error); }
+// 기본정보 저장
+async function saveBasicInfo(){
+  const name=document.getElementById('p-name').value;
+  const influencer_name=document.getElementById('p-inf-name').value;
+  const phone=document.getElementById('p-phone').value;
+  const followers=document.getElementById('p-followers').value;
+  const recruited_date=document.getElementById('p-recruited').value;
+  const memo=document.getElementById('p-memo').value;
+  const backup={...localGet(selectedId)};
+  localUpdate(selectedId,{name,influencer_name,phone,followers,recruited_date,memo});
+  renderPanel();renderDashboard();
+  syncStart();const r=await api('update',{id:selectedId,name,influencer_name,phone,followers,recruited_date,memo});syncEnd();
+  if(!r.success){localUpdate(selectedId,backup);renderPanel();alert('저장 실패: '+r.error)}
 }
 
-async function advanceWithDate(field, inputId) {
-  const inf = localGet(selectedId);
-  const prev = Number(inf.stage), next = prev + 1;
-  const dateVal = document.getElementById(inputId)?.value || '';
-  localUpdate(selectedId, { stage: next, [field]: dateVal });
-  render(); renderPanel();
-
-  syncStart();
-  const r = await api('update', { id: selectedId, stage: next, [field]: dateVal });
-  syncEnd();
-  if (!r.success) { localUpdate(selectedId, { stage: prev, [field]: inf[field] }); render(); renderPanel(); alert('저장 실패: ' + r.error); }
+// 단순 단계 이동
+async function advanceStage(){
+  const inf=localGet(selectedId);
+  const next=getNextStageId(Number(inf.stage));
+  if(next===null)return;
+  const prev=Number(inf.stage);
+  localUpdate(selectedId,{stage:next});render();renderPanel();
+  syncStart();const r=await api('update',{id:selectedId,stage:next});syncEnd();
+  if(!r.success){localUpdate(selectedId,{stage:prev});render();renderPanel();alert('저장 실패')}
 }
 
-async function saveVideoInfo() {
-  const adCode = document.getElementById('p-ad-code').value;
-  const account = document.getElementById('p-account').value;
-  const idReceived = document.getElementById('p-id-received').checked ? 'Y' : 'N';
-  if (!adCode || !account) return alert('광고 코드와 계좌번호를 입력해주세요.');
-  const inf = localGet(selectedId);
-  const prev = Number(inf.stage), next = prev + 1;
-  localUpdate(selectedId, { stage: next, ad_code: adCode, account_number: account, id_received: idReceived });
-  render(); renderPanel();
-
-  syncStart();
-  const r = await api('update', { id: selectedId, stage: next, ad_code: adCode, account_number: account, id_received: idReceived });
-  syncEnd();
-  if (!r.success) { localUpdate(selectedId, { stage: prev }); render(); renderPanel(); alert('저장 실패: ' + r.error); }
+async function advanceWithDate(field,inputId){
+  const inf=localGet(selectedId);
+  const next=getNextStageId(Number(inf.stage));
+  const dateVal=document.getElementById(inputId)?.value||'';
+  const prev=Number(inf.stage);
+  const prevField=inf[field];
+  localUpdate(selectedId,{stage:next,[field]:dateVal});render();renderPanel();
+  syncStart();const r=await api('update',{id:selectedId,stage:next,[field]:dateVal});syncEnd();
+  if(!r.success){localUpdate(selectedId,{stage:prev,[field]:prevField});render();renderPanel();alert('저장 실패')}
 }
 
-async function completeAll() {
-  const adSetupDate = document.getElementById('p-ad-setup-date').value;
-  const paymentDate = document.getElementById('p-payment-date').value;
-  const backup = { ...localGet(selectedId) };
-  localUpdate(selectedId, { stage: 8, status: 'done', ad_setup_date: adSetupDate, payment_date: paymentDate });
-  render(); renderPanel();
-
-  syncStart();
-  const r = await api('update', { id: selectedId, stage: 8, status: 'done', ad_setup_date: adSetupDate, payment_date: paymentDate });
-  syncEnd();
-  if (!r.success) { localUpdate(selectedId, backup); render(); renderPanel(); alert('저장 실패: ' + r.error); }
+// 진행의사 확인 완료
+async function confirmIntention(){
+  const inf_name=document.getElementById('p-inf-name2').value;
+  const phone=document.getElementById('p-phone2').value;
+  const inf=localGet(selectedId);
+  const next=getNextStageId(Number(inf.stage));
+  const backup={...inf};
+  localUpdate(selectedId,{stage:next,influencer_name:inf_name,phone});render();renderPanel();
+  syncStart();const r=await api('update',{id:selectedId,stage:next,influencer_name:inf_name,phone});syncEnd();
+  if(!r.success){localUpdate(selectedId,backup);render();renderPanel();alert('저장 실패')}
 }
 
-async function rejectInfluencer() {
-  if (!confirm('이 인플루언서를 거절 처리할까요?')) return;
-  const backup = { ...localGet(selectedId) };
-  localUpdate(selectedId, { status: 'rejected' });
-  render(); renderPanel();
-
-  syncStart();
-  const r = await api('update', { id: selectedId, status: 'rejected' });
-  syncEnd();
-  if (!r.success) { localUpdate(selectedId, backup); render(); renderPanel(); alert('저장 실패: ' + r.error); }
+// 계약완료
+async function completeContract(){
+  const contract_date=document.getElementById('p-contract-date').value;
+  const special_note=document.getElementById('p-special-note').value;
+  const inf=localGet(selectedId);
+  const next=getNextStageId(Number(inf.stage));
+  const contract_file=uploadedFiles['p-contract-file']||inf.contract_file||'';
+  const backup={...inf};
+  localUpdate(selectedId,{stage:next,contract_sent_date:contract_date,contract_file,special_note});render();renderPanel();
+  syncStart();const r=await api('update',{id:selectedId,stage:next,contract_sent_date:contract_date,contract_file,special_note});syncEnd();
+  delete uploadedFiles['p-contract-file'];
+  if(!r.success){localUpdate(selectedId,backup);render();renderPanel();alert('저장 실패')}
 }
 
-async function restoreInfluencer() {
-  const backup = { ...localGet(selectedId) };
-  localUpdate(selectedId, { status: 'active', stage: 0 });
-  render(); renderPanel();
-
-  syncStart();
-  const r = await api('update', { id: selectedId, status: 'active', stage: 0 });
-  syncEnd();
-  if (!r.success) { localUpdate(selectedId, backup); render(); renderPanel(); alert('저장 실패: ' + r.error); }
-}
-
-// ★ Optimistic Delete
-async function deleteInfluencer() {
-  if (!confirm('이 인플루언서를 완전히 삭제할까요?\n삭제 후 복구가 불가능합니다.')) return;
-  const deletedId = selectedId;
-  const backup = { ...localGet(deletedId) };
-
-  // 즉시 삭제
-  localRemove(deletedId);
-  closePanel();
-  render();
-
-  // 백그라운드 삭제
-  syncStart();
-  try {
-    const url = new URL(SCRIPT_URL);
-    url.searchParams.set('action', 'delete');
-    url.searchParams.set('id', deletedId);
-    const res = await fetch(url.toString());
-    const r = await res.json();
-    syncEnd();
-    if (!r.success) { localAdd(backup); render(); alert('삭제 실패: ' + r.error); }
-  } catch(e) {
-    syncEnd();
-    localAdd(backup); render();
-    alert('삭제 오류: ' + e.message);
+// 제품발송 완료
+async function completeProduct(){
+  const product_date=document.getElementById('p-product-date').value;
+  const ad_code=document.getElementById('p-ad-code').value;
+  const product_only=document.getElementById('p-product-only').checked?'Y':'N';
+  if(!ad_code)return alert('광고 코드를 입력해주세요.');
+  const inf=localGet(selectedId);
+  const next=getNextStageId(Number(inf.stage));
+  let bankbook_file=inf.bankbook_file||'';
+  let id_file=inf.id_file||'';
+  if(product_only==='N'){
+    if(uploadedFiles['p-bankbook-file'])bankbook_file=uploadedFiles['p-bankbook-file'];
+    if(uploadedFiles['p-id-file'])id_file=uploadedFiles['p-id-file'];
   }
+  const backup={...inf};
+  localUpdate(selectedId,{stage:next,product_sent_date:product_date,ad_code,bankbook_file,id_file,product_only});render();renderPanel();
+  syncStart();const r=await api('update',{id:selectedId,stage:next,product_sent_date:product_date,ad_code,bankbook_file,id_file,product_only});syncEnd();
+  delete uploadedFiles['p-bankbook-file'];delete uploadedFiles['p-id-file'];
+  if(!r.success){localUpdate(selectedId,backup);render();renderPanel();alert('저장 실패')}
 }
 
-// ── 정산 ──
-function setThisMonth() { const now = new Date(); document.getElementById('settlement-month').value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`; renderSettlement(); }
-function renderSettlement() {
-  const month = document.getElementById('settlement-month').value;
-  if (!month) return;
-  const dmItems = influencers.filter(i => i.dm_sent_date && formatDate(i.dm_sent_date).startsWith(month));
-  const doneItems = influencers.filter(i => i.status === 'done' && i.payment_date && formatDate(i.payment_date).startsWith(month));
-  const dmPay = dmItems.length * 2000, donePay = doneItems.length * 20000, total = dmPay + donePay;
-  document.getElementById('dm-count').innerHTML = `${dmItems.length}건 × 2,000원 = <b>${dmPay.toLocaleString()}원</b>`;
-  document.getElementById('complete-count').innerHTML = `${doneItems.length}건 × 20,000원 = <b>${donePay.toLocaleString()}원</b>`;
-  document.getElementById('total-pay').textContent = total.toLocaleString() + '원';
-  const allItems = [...new Set([...dmItems.map(i => i.id), ...doneItems.map(i => i.id)])].map(id => influencers.find(i => i.id === id));
-  const tbody = document.getElementById('settlement-table');
-  if (allItems.length === 0) { tbody.innerHTML = `<tr><td colspan="6"><div class="empty">해당 월 정산 내역이 없습니다.</div></td></tr>`; return; }
-  tbody.innerHTML = allItems.map(i => {
-    const hasDM = i.dm_sent_date && formatDate(i.dm_sent_date).startsWith(month);
-    const hasDone = i.status === 'done' && i.payment_date && formatDate(i.payment_date).startsWith(month);
-    return `<tr><td>@${i.instagram_id||i.nickname}</td><td>${i.name||'-'}</td><td>${hasDM?formatDate(i.dm_sent_date):'-'}</td><td>${hasDone?formatDate(i.payment_date):'-'}</td><td>${hasDM?'2,000원':'-'}</td><td>${hasDone?'20,000원':'-'}</td></tr>`;
+// 광고세팅/입금 완료
+async function completeAll(){
+  const paymentDate=document.getElementById('p-payment-date').value;
+  const backup={...localGet(selectedId)};
+  localUpdate(selectedId,{stage:8,status:'done',payment_date:paymentDate});render();renderPanel();
+  syncStart();const r=await api('update',{id:selectedId,stage:8,status:'done',payment_date:paymentDate});syncEnd();
+  if(!r.success){localUpdate(selectedId,backup);render();renderPanel();alert('저장 실패')}
+}
+
+async function rejectInfluencer(){
+  if(!confirm('거절 처리할까요?'))return;
+  const backup={...localGet(selectedId)};
+  localUpdate(selectedId,{status:'rejected'});render();renderPanel();
+  syncStart();const r=await api('update',{id:selectedId,status:'rejected'});syncEnd();
+  if(!r.success){localUpdate(selectedId,backup);render();renderPanel()}
+}
+
+async function restoreInfluencer(){
+  const backup={...localGet(selectedId)};
+  localUpdate(selectedId,{status:'active',stage:0});render();renderPanel();
+  syncStart();const r=await api('update',{id:selectedId,status:'active',stage:0});syncEnd();
+  if(!r.success){localUpdate(selectedId,backup);render();renderPanel()}
+}
+
+async function deleteInfluencer(){
+  if(!confirm('완전히 삭제할까요?\n삭제 후 복구 불가능합니다.'))return;
+  const deletedId=selectedId;
+  const backup={...localGet(deletedId)};
+  localRemove(deletedId);closePanel();render();
+  syncStart();
+  try{
+    const url=new URL(SCRIPT_URL);url.searchParams.set('action','delete');url.searchParams.set('id',deletedId);
+    const res=await fetch(url.toString());const r=await res.json();syncEnd();
+    if(!r.success){localAdd(backup);render();alert('삭제 실패: '+r.error)}
+  }catch(e){syncEnd();localAdd(backup);render();alert('오류: '+e.message)}
+}
+
+// 정산
+function setThisMonth(){const now=new Date();document.getElementById('settlement-month').value=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;renderSettlement()}
+function renderSettlement(){
+  const month=document.getElementById('settlement-month').value;if(!month)return;
+  const dmItems=influencers.filter(i=>i.dm_sent_date&&formatDate(i.dm_sent_date).startsWith(month));
+  const doneItems=influencers.filter(i=>i.status==='done'&&i.payment_date&&formatDate(i.payment_date).startsWith(month));
+  const dmPay=dmItems.length*2000,donePay=doneItems.length*20000,total=dmPay+donePay;
+  document.getElementById('dm-count').innerHTML=`${dmItems.length}건 × 2,000원 = <b>${dmPay.toLocaleString()}원</b>`;
+  document.getElementById('complete-count').innerHTML=`${doneItems.length}건 × 20,000원 = <b>${donePay.toLocaleString()}원</b>`;
+  document.getElementById('total-pay').textContent=total.toLocaleString()+'원';
+  const allIds=[...new Set([...dmItems.map(i=>i.id),...doneItems.map(i=>i.id)])];
+  const allItems=allIds.map(id=>influencers.find(i=>i.id===id)).filter(Boolean);
+  const tbody=document.getElementById('settlement-table');
+  if(!allItems.length){tbody.innerHTML=`<tr><td colspan="6"><div class="empty">해당 월 내역 없음</div></td></tr>`;return}
+  tbody.innerHTML=allItems.map(i=>{
+    const hDM=i.dm_sent_date&&formatDate(i.dm_sent_date).startsWith(month);
+    const hDone=i.status==='done'&&i.payment_date&&formatDate(i.payment_date).startsWith(month);
+    return`<tr><td>@${i.instagram_id||i.nickname}</td><td>${i.name||'-'}</td><td>${hDM?formatDate(i.dm_sent_date):'-'}</td><td>${hDone?formatDate(i.payment_date):'-'}</td><td>${hDM?'2,000원':'-'}</td><td>${hDone?'20,000원':'-'}</td></tr>`;
   }).join('');
 }
-function copySettlement() {
-  const month = document.getElementById('settlement-month').value;
-  const dmCount = influencers.filter(i => i.dm_sent_date && formatDate(i.dm_sent_date).startsWith(month)).length;
-  const doneCount = influencers.filter(i => i.status === 'done' && i.payment_date && formatDate(i.payment_date).startsWith(month)).length;
-  const total = (dmCount * 2000) + (doneCount * 20000);
-  navigator.clipboard.writeText(`[${month} 정산]\nDM 발송: ${dmCount}건 × 2,000원 = ${(dmCount*2000).toLocaleString()}원\n협찬 완료: ${doneCount}건 × 20,000원 = ${(doneCount*20000).toLocaleString()}원\n합계: ${total.toLocaleString()}원`).then(() => alert('클립보드에 복사됐습니다.'));
+function copySettlement(){
+  const month=document.getElementById('settlement-month').value;
+  const dmCount=influencers.filter(i=>i.dm_sent_date&&formatDate(i.dm_sent_date).startsWith(month)).length;
+  const doneCount=influencers.filter(i=>i.status==='done'&&i.payment_date&&formatDate(i.payment_date).startsWith(month)).length;
+  const total=(dmCount*2000)+(doneCount*20000);
+  navigator.clipboard.writeText(`[${month} 정산]\nDM 발송: ${dmCount}건 × 2,000원 = ${(dmCount*2000).toLocaleString()}원\n협찬 완료: ${doneCount}건 × 20,000원 = ${(doneCount*20000).toLocaleString()}원\n합계: ${total.toLocaleString()}원`).then(()=>alert('클립보드에 복사됐습니다.'));
 }
 </script>
 </body>
