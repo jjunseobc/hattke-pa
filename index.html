@@ -12,10 +12,6 @@
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif; font-size: 14px; min-height: 100vh; }
-#setup { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; }
-.setup-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 40px; width: 100%; max-width: 480px; }
-.setup-card h2 { font-size: 20px; margin-bottom: 8px; }
-.setup-card p { color: var(--muted); margin-bottom: 24px; line-height: 1.6; }
 #app { display: none; }
 header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; gap: 32px; position: sticky; top: 0; z-index: 100; }
 header h1 { font-size: 16px; font-weight: 700; padding: 16px 0; white-space: nowrap; }
@@ -23,7 +19,6 @@ nav { display: flex; gap: 0; }
 nav button { background: none; border: none; color: var(--muted); padding: 16px 20px; cursor: pointer; font-size: 14px; border-bottom: 2px solid transparent; transition: all 0.15s; }
 nav button.active { color: var(--primary); border-bottom-color: var(--primary); }
 nav button:hover:not(.active) { color: var(--text); }
-.header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
 .tab { display: none; padding: 24px; max-width: 1200px; margin: 0 auto; }
 .tab.active { display: block; }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-bottom: 24px; }
@@ -120,18 +115,6 @@ textarea { resize: vertical; min-height: 70px; }
 </head>
 <body>
 
-<div id="setup">
-  <div class="setup-card">
-    <h2>⚙️ 초기 설정</h2>
-    <p>Google Apps Script 웹 앱 URL을 입력해주세요.<br>한 번만 입력하면 저장됩니다.</p>
-    <div class="form-group">
-      <label>Apps Script URL</label>
-      <input type="text" id="script-url-input" placeholder="https://script.google.com/macros/s/...">
-    </div>
-    <button class="btn btn-primary btn-block" onclick="saveScriptUrl()">저장 후 시작</button>
-  </div>
-</div>
-
 <div id="app">
   <header>
     <h1>🎯 해트케 인플루언서</h1>
@@ -140,9 +123,6 @@ textarea { resize: vertical; min-height: 70px; }
       <button onclick="switchTab('management', this)">인플루언서 관리</button>
       <button onclick="switchTab('settlement', this)">정산</button>
     </nav>
-    <div class="header-right">
-      <button class="btn btn-outline btn-sm" onclick="resetUrl()">URL 변경</button>
-    </div>
   </header>
 
   <div id="tab-dashboard" class="tab active">
@@ -218,6 +198,8 @@ textarea { resize: vertical; min-height: 70px; }
 </div>
 
 <script>
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyu2pRScWpq3WhsK9aA7WhEXWYlGvA_0YiG4xuX8YmBP34A8BX9dUph2QgcfbuLGdo/exec';
+
 const STAGES = [
   { id: 0, name: '모집됨',         color: '#6c757d' },
   { id: 1, name: '협찬대상 선정',   color: '#fd7e14' },
@@ -231,37 +213,14 @@ const STAGES = [
 ];
 
 let influencers = [], selectedId = null, currentFilter = 'all';
-let SCRIPT_URL = localStorage.getItem('hatke_script_url') || '';
 
 window.onload = () => {
-  if (SCRIPT_URL) {
-    document.getElementById('setup').style.display = 'none';
-    document.getElementById('app').style.display = 'block';
-    loadData();
-  }
+  document.getElementById('app').style.display = 'block';
   document.getElementById('add-recruited-date').value = new Date().toISOString().split('T')[0];
   setThisMonth();
+  loadData();
 };
 
-function saveScriptUrl() {
-  const url = document.getElementById('script-url-input').value.trim();
-  if (!url) return alert('URL을 입력해주세요.');
-  SCRIPT_URL = url;
-  localStorage.setItem('hatke_script_url', url);
-  document.getElementById('setup').style.display = 'none';
-  document.getElementById('app').style.display = 'block';
-  loadData();
-}
-
-function resetUrl() {
-  if (!confirm('Apps Script URL을 초기화할까요?')) return;
-  localStorage.removeItem('hatke_script_url');
-  SCRIPT_URL = '';
-  document.getElementById('setup').style.display = 'flex';
-  document.getElementById('app').style.display = 'none';
-}
-
-// ── API (에러 핸들링 포함) ──
 async function api(action, data) {
   try {
     const url = new URL(SCRIPT_URL);
@@ -311,13 +270,11 @@ function renderDashboard() {
   html += `<div class="card" style="border-top:3px solid #e74c3c"><div class="card-count" style="color:#e74c3c">${rejected.length}</div><div class="card-label">거절됨</div></div>`;
   document.getElementById('stage-cards').innerHTML = html;
 
-  // 내 할 일: 모집됨(0) 선정 대기 + 영상완료(6) 광고세팅 대기
   const bossItems = active.filter(i => Number(i.stage) === 0 || Number(i.stage) === 6);
   document.getElementById('boss-todo').innerHTML = bossItems.length === 0
     ? '<div class="text-muted" style="padding:8px 0">할 일 없음 ✓</div>'
     : bossItems.map(i => { const s = STAGES[Number(i.stage)]; return `<div class="todo-item" onclick="openDetail('${i.id}')"><span class="todo-name">@${i.instagram_id||i.nickname}</span><span class="todo-stage" style="background:${s.color}22;color:${s.color}">${s.name}</span></div>`; }).join('');
 
-  // 아르바이트 할 일: 협찬대상선정(1) ~ 제품발송(5)
   const partItems = active.filter(i => Number(i.stage) >= 1 && Number(i.stage) <= 5);
   document.getElementById('part-todo').innerHTML = partItems.length === 0
     ? '<div class="text-muted" style="padding:8px 0">할 일 없음 ✓</div>'
