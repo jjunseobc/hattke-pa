@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>해트케 인플루언서 관리</title>
+<style>
+:root {
+  --bg: #0f0f0f; --surface: #1a1a1a; --surface2: #242424; --surface3: #2e2e2e;
+  --border: #333; --text: #e8e8e8; --muted: #888; --primary: #4f8ef7;
+  --success: #28a745; --warning: #ffc107; --danger: #e74c3c; --orange: #fd7e14;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif; font-size: 14px; min-height: 100vh; }
+#setup { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; }
+.setup-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 40px; width: 100%; max-width: 480px; }
+.setup-card h2 { font-size: 20px; margin-bottom: 8px; }
+.setup-card p { color: var(--muted); margin-bottom: 24px; line-height: 1.6; }
+#app { display: none; }
+header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; gap: 32px; position: sticky; top: 0; z-index: 100; }
+header h1 { font-size: 16px; font-weight: 700; padding: 16px 0; white-space: nowrap; }
+nav { display: flex; gap: 0; }
+nav button { background: none; border: none; color: var(--muted); padding: 16px 20px; cursor: pointer; font-size: 14px; border-bottom: 2px solid transparent; transition: all 0.15s; }
+nav button.active { color: var(--primary); border-bottom-color: var(--primary); }
+nav button:hover:not(.active) { color: var(--text); }
+.header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.tab { display: none; padding: 24px; max-width: 1200px; margin: 0 auto; }
+.tab.active { display: block; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; cursor: pointer; transition: all 0.15s; }
+.card:hover { border-color: var(--primary); }
+.card-count { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
+.card-label { font-size: 12px; color: var(--muted); }
+.todo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+.todo-box { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+.todo-box h3 { font-size: 13px; color: var(--muted); margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+.todo-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: var(--surface2); border-radius: 6px; margin-bottom: 6px; cursor: pointer; transition: background 0.15s; }
+.todo-item:hover { background: var(--surface3); }
+.todo-item:last-child { margin-bottom: 0; }
+.todo-name { font-weight: 500; }
+.todo-stage { font-size: 11px; padding: 2px 8px; border-radius: 20px; }
+.toolbar { display: flex; gap: 10px; margin-bottom: 16px; align-items: center; flex-wrap: wrap; }
+.toolbar input[type="text"] { flex: 1; min-width: 160px; }
+.filter-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+.filter-tab { padding: 5px 12px; border-radius: 20px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); cursor: pointer; font-size: 12px; transition: all 0.15s; white-space: nowrap; }
+.filter-tab.active { border-color: var(--primary); color: var(--primary); background: #1a2540; }
+.filter-tab:hover:not(.active) { color: var(--text); border-color: #555; }
+.table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+table { width: 100%; border-collapse: collapse; }
+thead th { background: var(--surface2); padding: 10px 14px; text-align: left; font-size: 12px; color: var(--muted); font-weight: 600; white-space: nowrap; border-bottom: 1px solid var(--border); }
+tbody tr { border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.1s; }
+tbody tr:last-child { border-bottom: none; }
+tbody tr:hover { background: var(--surface2); }
+tbody tr.selected { background: #1a2540; }
+td { padding: 10px 14px; vertical-align: middle; }
+.stage-badge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.followers-text { color: var(--muted); font-size: 13px; }
+.link-btn { color: var(--primary); text-decoration: none; font-size: 12px; padding: 2px 6px; background: #1a2540; border-radius: 4px; }
+.link-btn:hover { background: #243050; }
+#detail-panel { position: fixed; top: 0; right: -420px; width: 420px; height: 100vh; background: var(--surface); border-left: 1px solid var(--border); overflow-y: auto; transition: right 0.25s ease; z-index: 200; }
+#detail-panel.open { right: 0; }
+.panel-header { padding: 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; background: var(--surface); z-index: 1; }
+.panel-header h2 { font-size: 16px; }
+.panel-body { padding: 20px; }
+.timeline { margin-bottom: 24px; }
+.timeline-item { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 2px; }
+.timeline-dot { width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; margin-top: 1px; }
+.timeline-dot.done { background: var(--success); color: #fff; }
+.timeline-dot.current { background: var(--primary); color: #fff; box-shadow: 0 0 0 3px rgba(79,142,247,0.25); }
+.timeline-dot.pending { background: var(--surface3); color: var(--muted); border: 1px solid var(--border); }
+.timeline-line { width: 1px; height: 16px; background: var(--border); margin-left: 9px; }
+.timeline-label { font-size: 13px; padding: 1px 0; }
+.timeline-label.done { color: var(--muted); }
+.timeline-label.current { font-weight: 600; }
+.timeline-date { font-size: 11px; color: var(--muted); margin-left: 4px; }
+.form-group { margin-bottom: 14px; }
+.form-group label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+input[type="text"], input[type="number"], input[type="date"], textarea, select { width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; font-size: 14px; outline: none; transition: border-color 0.15s; }
+input:focus, textarea:focus, select:focus { border-color: var(--primary); }
+textarea { resize: vertical; min-height: 70px; }
+.auto-fill { background: var(--surface3) !important; color: var(--muted) !important; }
+.btn { padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.15s; white-space: nowrap; }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: #3d7df0; }
+.btn-success { background: var(--success); color: #fff; }
+.btn-success:hover { background: #219a38; }
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-danger:hover { background: #c0392b; }
+.btn-outline { background: none; border: 1px solid var(--border); color: var(--text); }
+.btn-outline:hover { border-color: #555; background: var(--surface2); }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+.btn-block { width: 100%; }
+.btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 300; padding: 24px; }
+.overlay.open { display: flex; }
+.modal { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px; width: 100%; max-width: 460px; max-height: 90vh; overflow-y: auto; }
+.modal h3 { font-size: 16px; margin-bottom: 20px; }
+.modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+.settlement-summary { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+.settlement-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.settlement-row:last-child { border-bottom: none; }
+.settlement-total { font-size: 18px; font-weight: 700; color: var(--primary); }
+.copy-btn-wrap { margin-top: 16px; }
+.empty { text-align: center; padding: 48px; color: var(--muted); }
+.divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+.text-muted { color: var(--muted); font-size: 12px; }
+.mt-12 { margin-top: 12px; }
+.checkbox-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.checkbox-row input[type="checkbox"] { width: auto; }
+.section-title { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; margin-top: 20px; }
+@media (max-width: 600px) {
+  .todo-grid { grid-template-columns: 1fr; }
+  #detail-panel { width: 100%; right: -100%; }
+  .cards { grid-template-columns: repeat(3, 1fr); }
+  header { padding: 0 16px; gap: 16px; }
+  header h1 { font-size: 14px; }
+  .tab { padding: 16px; }
+}
+</style>
+</head>
+<body>
+
+<div id="setup">
+  <div class="setup-card">
+    <h2>⚙️ 초기 설정</h2>
+    <p>Google Apps Script 웹 앱 URL을 입력해주세요.<br>한 번만 입력하면 저장됩니다.</p>
+    <div class="form-group">
+      <label>Apps Script URL</label>
+      <input type="text" id="script-url-input" placeholder="https://script.google.com/macros/s/...">
+    </div>
+    <button class="btn btn-primary btn-block" onclick="saveScriptUrl()">저장 후 시작</button>
+  </div>
+</div>
+
+<div id="app">
+  <header>
+    <h1>🎯 해트케 인플루언서</h1>
+    <nav>
+      <button class="active" onclick="switchTab('dashboard', this)">대시보드</button>
+      <button onclick="switchTab('management', this)">인플루언서 관리</button>
+      <button onclick="switchTab('settlement', this)">정산</button>
+    </nav>
+    <div class="header-right">
+      <button class="btn btn-outline btn-sm" onclick="resetUrl()">URL 변경</button>
+    </div>
+  </header>
+
+  <div id="tab-dashboard" class="tab active">
+    <div id="stage-cards" class="cards"></div>
+    <div class="todo-grid">
+      <div class="todo-box">
+        <h3><span style="color:#e74c3c">🔴</span> 내 할 일 (확인 필요)</h3>
+        <div id="boss-todo"></div>
+      </div>
+      <div class="todo-box">
+        <h3><span style="color:#ffc107">🟡</span> 아르바이트 할 일</h3>
+        <div id="part-todo"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-management" class="tab">
+    <div class="toolbar">
+      <input type="text" id="search-input" placeholder="계정명 또는 이름 검색..." oninput="renderList()">
+      <button class="btn btn-primary" onclick="openAddModal()">+ 인플루언서 추가</button>
+    </div>
+    <div id="filter-tabs" class="filter-tabs"></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>계정명</th><th>이름</th><th>팔로워</th><th>모집일</th><th>단계</th><th>릴스</th></tr></thead>
+        <tbody id="influencer-table"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="tab-settlement" class="tab">
+    <div class="toolbar">
+      <input type="month" id="settlement-month" onchange="renderSettlement()">
+      <button class="btn btn-outline btn-sm" onclick="setThisMonth()">이번달</button>
+    </div>
+    <div class="settlement-summary">
+      <div class="settlement-row"><span>DM 발송 건수</span><span id="dm-count">0건 × 2,000원 = <b>0원</b></span></div>
+      <div class="settlement-row"><span>협찬 완료 건수</span><span id="complete-count">0건 × 20,000원 = <b>0원</b></span></div>
+      <div class="settlement-row"><span style="font-weight:600">합계</span><span class="settlement-total" id="total-pay">0원</span></div>
+      <div class="copy-btn-wrap"><button class="btn btn-outline btn-sm" onclick="copySettlement()">📋 클립보드 복사</button></div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>닉네임</th><th>이름</th><th>DM 발송일</th><th>협찬 완료일</th><th>DM 수당</th><th>협찬 수당</th></tr></thead>
+        <tbody id="settlement-table"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="add-overlay" onclick="closeAddModal(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h3>인플루언서 추가</h3>
+    <div class="form-group"><label>인스타그램 URL 붙여넣기</label><input type="text" id="insta-url" placeholder="https://www.instagram.com/계정명/reels/" oninput="parseUrl()"></div>
+    <div class="form-group"><label>계정명 (자동 입력)</label><input type="text" id="add-instagram-id" class="auto-fill" readonly placeholder="URL 입력 시 자동"></div>
+    <div class="form-group"><label>릴스 주소 (자동 입력)</label><input type="text" id="add-reels-url" class="auto-fill" readonly placeholder="URL 입력 시 자동"></div>
+    <div class="form-group"><label>이름 (실명 또는 별칭)</label><input type="text" id="add-name" placeholder="홍길동"></div>
+    <div class="form-group"><label>팔로워 수</label><input type="text" id="add-followers" placeholder="12300 또는 12.3만"></div>
+    <div class="form-group"><label>모집일</label><input type="date" id="add-recruited-date"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeAddModal()">취소</button>
+      <button class="btn btn-primary" onclick="submitAdd()">추가</button>
+    </div>
+  </div>
+</div>
+
+<div id="detail-panel">
+  <div class="panel-header">
+    <h2 id="panel-title">-</h2>
+    <button class="btn btn-outline btn-sm" onclick="closePanel()">✕ 닫기</button>
+  </div>
+  <div class="panel-body" id="panel-body"></div>
+</div>
+
+<script>
+const STAGES = [
+  { id: 0, name: '모집됨',         color: '#6c757d' },
+  { id: 1, name: '협찬대상 선정',   color: '#fd7e14' },
+  { id: 2, name: 'DM 발송',        color: '#0dcaf0' },
+  { id: 3, name: '진행의사 확인',   color: '#ffc107' },
+  { id: 4, name: '계약완료',        color: '#20c997' },
+  { id: 5, name: '제품발송',        color: '#3b82f6' },
+  { id: 6, name: '영상완료',        color: '#a855f7' },
+  { id: 7, name: '광고세팅/입금',   color: '#ec4899' },
+  { id: 8, name: '완료',            color: '#22c55e' },
+];
+
+let influencers = [], selectedId = null, currentFilter = 'all';
+let SCRIPT_URL = localStorage.getItem('hatke_script_url') || '';
+
+window.onload = () => {
+  if (SCRIPT_URL) {
+    document.getElementById('setup').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    loadData();
+  }
+  document.getElementById('add-recruited-date').value = new Date().toISOString().split('T')[0];
+  setThisMonth();
+};
+
+function saveScriptUrl() {
+  const url = document.getElementById('script-url-input').value.trim();
+  if (!url) return alert('URL을 입력해주세요.');
+  SCRIPT_URL = url;
+  localStorage.setItem('hatke_script_url', url);
+  document.getElementById('setup').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  loadData();
+}
+
+function resetUrl() {
+  if (!confirm('Apps Script URL을 초기화할까요?')) return;
+  localStorage.removeItem('hatke_script_url');
+  SCRIPT_URL = '';
+  document.getElementById('setup').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+}
+
+async function api(action, data) {
+  const url = new URL(SCRIPT_URL);
+  url.searchParams.set('action', action);
+  if (data) url.searchParams.set('data', JSON.stringify(data));
+  const res = await fetch(url.toString());
+  return await res.json();
+}
+
+async function loadData() {
+  const result = await api('getAll');
+  if (result.success) { influencers = result.data.filter(r => r.status !== 'deleted'); render(); }
+}
+
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+  closePanel();
+  if (name === 'settlement') renderSettlement();
+}
+
+function render() { renderDashboard(); renderFilterTabs(); renderList(); }
+
+function renderDashboard() {
+  const active = influencers.filter(i => i.status === 'active');
+  const rejected = influencers.filter(i => i.status === 'rejected');
+  let html = '';
+  STAGES.forEach(s => {
+    const count = active.filter(i => Number(i.stage) === s.id).length;
+    html += `<div class="card" style="border-top:3px solid ${s.color}" onclick="jumpToFilter(${s.id})"><div class="card-count" style="color:${s.color}">${count}</div><div class="card-label">${s.name}</div></div>`;
+  });
+  html += `<div class="card" style="border-top:3px solid #e74c3c"><div class="card-count" style="color:#e74c3c">${rejected.length}</div><div class="card-label">거절됨</div></div>`;
+  document.getElementById('stage-cards').innerHTML = html;
+
+  const bossItems = active.filter(i => Number(i.stage) === 0 || Number(i.stage) === 7);
+  document.getElementById('boss-todo').innerHTML = bossItems.length === 0
+    ? '<div class="text-muted" style="padding:8px 0">할 일 없음 ✓</div>'
+    : bossItems.map(i => { const s = STAGES[Number(i.stage)]; return `<div class="todo-item" onclick="openDetail('${i.id}')"><span class="todo-name">@${i.instagram_id||i.nickname}</span><span class="todo-stage" style="background:${s.color}22;color:${s.color}">${s.name}</span></div>`; }).join('');
+
+  const partItems = active.filter(i => { const s = Number(i.stage); return s >= 1 && s <= 6; });
+  document.getElementById('part-todo').innerHTML = partItems.length === 0
+    ? '<div class="text-muted" style="padding:8px 0">할 일 없음 ✓</div>'
+    : partItems.map(i => { const s = STAGES[Number(i.stage)]; return `<div class="todo-item" onclick="openDetail('${i.id}')"><span class="todo-name">@${i.instagram_id||i.nickname}</span><span class="todo-stage" style="background:${s.color}22;color:${s.color}">${s.name}</span></div>`; }).join('');
+}
+
+function renderFilterTabs() {
+  const active = influencers.filter(i => i.status === 'active');
+  let html = `<div class="filter-tab ${currentFilter==='all'?'active':''}" onclick="setFilter('all')">전체 (${active.length})</div>`;
+  STAGES.forEach(s => {
+    const count = active.filter(i => Number(i.stage) === s.id).length;
+    html += `<div class="filter-tab ${currentFilter===s.id?'active':''}" onclick="setFilter(${s.id})">${s.name} (${count})</div>`;
+  });
+  const rejCount = influencers.filter(i => i.status === 'rejected').length;
+  html += `<div class="filter-tab ${currentFilter==='rejected'?'active':''}" onclick="setFilter('rejected')">거절됨 (${rejCount})</div>`;
+  document.getElementById('filter-tabs').innerHTML = html;
+}
+
+function setFilter(f) { currentFilter = f; renderFilterTabs(); renderList(); }
+function jumpToFilter(id) { switchTab('management', document.querySelectorAll('nav button')[1]); setFilter(id); }
+
+function renderList() {
+  const search = (document.getElementById('search-input').value || '').toLowerCase();
+  let list = currentFilter === 'rejected' ? influencers.filter(i => i.status === 'rejected')
+    : currentFilter !== 'all' ? influencers.filter(i => i.status === 'active' && Number(i.stage) === currentFilter)
+    : influencers.filter(i => i.status === 'active');
+  if (search) list = list.filter(i => (i.instagram_id||'').toLowerCase().includes(search) || (i.name||'').toLowerCase().includes(search));
+  const tbody = document.getElementById('influencer-table');
+  if (list.length === 0) { tbody.innerHTML = `<tr><td colspan="6"><div class="empty">인플루언서가 없습니다.</div></td></tr>`; return; }
+  tbody.innerHTML = list.map(i => {
+    const stage = i.status === 'rejected' ? {name:'거절됨',color:'#e74c3c'} : STAGES[Number(i.stage)] || STAGES[0];
+    return `<tr class="${selectedId===i.id?'selected':''}" onclick="openDetail('${i.id}')">
+      <td><b>@${i.instagram_id||i.nickname||'-'}</b></td><td>${i.name||'-'}</td>
+      <td class="followers-text">${i.followers?formatFollowers(i.followers):'-'}</td>
+      <td class="followers-text">${i.recruited_date||'-'}</td>
+      <td><span class="stage-badge" style="background:${stage.color}22;color:${stage.color}">${stage.name}</span></td>
+      <td>${i.reels_url?`<a class="link-btn" href="${i.reels_url}" target="_blank" onclick="event.stopPropagation()">릴스 ↗</a>`:'-'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function formatFollowers(n) {
+  const num = parseInt(String(n).replace(/[^0-9]/g, ''));
+  if (isNaN(num)) return n;
+  if (num >= 10000) return (num/10000).toFixed(1) + '만';
+  if (num >= 1000) return (num/1000).toFixed(1) + '천';
+  return String(num);
+}
+
+function openAddModal() {
+  ['insta-url','add-instagram-id','add-reels-url','add-name','add-followers'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('add-recruited-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('add-overlay').classList.add('open');
+}
+function closeAddModal(e) { if (!e || e.target === document.getElementById('add-overlay')) document.getElementById('add-overlay').classList.remove('open'); }
+function parseUrl() {
+  const match = document.getElementById('insta-url').value.trim().match(/instagram\.com\/([^\/\?]+)/);
+  if (match) { const u = match[1]; document.getElementById('add-instagram-id').value = u; document.getElementById('add-reels-url').value = `https://www.instagram.com/${u}/reels/`; }
+}
+async function submitAdd() {
+  const instagram_id = document.getElementById('add-instagram-id').value.trim();
+  if (!instagram_id) return alert('URL을 먼저 입력해주세요.');
+  const result = await api('add', { instagram_id, nickname: instagram_id, name: document.getElementById('add-name').value.trim(), followers: document.getElementById('add-followers').value.trim(), reels_url: document.getElementById('add-reels-url').value.trim(), recruited_date: document.getElementById('add-recruited-date').value, stage: 0, status: 'active' });
+  if (result.success) { closeAddModal(); await loadData(); } else alert('오류: ' + result.error);
+}
+
+function openDetail(id) { selectedId = id; renderList(); renderPanel(); document.getElementById('detail-panel').classList.add('open'); }
+function closePanel() { selectedId = null; document.getElementById('detail-panel').classList.remove('open'); renderList(); }
+
+function renderPanel() {
+  const inf = influencers.find(i => i.id === selectedId);
+  if (!inf) return;
+  const stage = Number(inf.stage);
+  document.getElementById('panel-title').textContent = '@' + (inf.instagram_id || inf.nickname);
+  const dateFields = [null, null, 'dm_sent_date', null, 'contract_sent_date', 'product_sent_date', null, 'ad_setup_date', 'payment_date'];
+  let tlHtml = '<div class="section-title">진행 단계</div><div class="timeline">';
+  STAGES.forEach((s, idx) => {
+    let dc = idx < stage ? 'done' : idx === stage ? 'current' : 'pending';
+    if (inf.status === 'rejected') dc = idx < stage ? 'done' : 'pending';
+    const lc = idx < stage ? 'done' : idx === stage ? 'current' : '';
+    const df = dateFields[idx]; const dv = df ? inf[df] : (idx === 0 ? inf.recruited_date : '');
+    tlHtml += `<div class="timeline-item"><div class="timeline-dot ${dc}">${idx < stage ? '✓' : idx+1}</div><div class="timeline-label ${lc}">${s.name}${dv ? `<span class="timeline-date">${dv}</span>` : ''}</div></div>`;
+    if (idx < STAGES.length - 1) tlHtml += '<div class="timeline-line"></div>';
+  });
+  if (inf.status === 'rejected') tlHtml += '<div class="timeline-item"><div class="timeline-dot" style="background:#e74c3c;color:#fff">✕</div><div class="timeline-label" style="color:#e74c3c">거절됨</div></div>';
+  tlHtml += '</div>';
+
+  const infoHtml = `<div class="section-title">기본 정보</div>
+    <div class="form-group"><label>이름</label><input type="text" id="p-name" value="${inf.name||''}"></div>
+    <div class="form-group"><label>팔로워 수</label><input type="text" id="p-followers" value="${inf.followers||''}"></div>
+    <div class="form-group"><label>모집일</label><input type="date" id="p-recruited" value="${inf.recruited_date||''}"></div>
+    <div class="form-group"><label>메모</label><textarea id="p-memo">${inf.memo||''}</textarea></div>
+    <button class="btn btn-outline btn-sm" onclick="saveBasicInfo()">기본 정보 저장</button><hr class="divider">`;
+
+  let actionHtml = '<div class="section-title">단계 액션</div>';
+  if (inf.status === 'rejected') {
+    actionHtml += `<p class="text-muted" style="margin-bottom:12px">거절 처리된 인플루언서입니다.</p><button class="btn btn-outline btn-sm" onclick="restoreInfluencer()">↩ 복구 (모집됨으로)</button>`;
+  } else if (stage === 0) {
+    actionHtml += `<p class="text-muted" style="margin-bottom:12px">협찬 대상으로 선정하면 아르바이트가 DM 발송을 진행합니다.</p><div class="btn-group"><button class="btn btn-success" onclick="advanceStage()">✓ 협찬 대상으로 선정</button><button class="btn btn-danger btn-sm" onclick="rejectInfluencer()">거절</button></div>`;
+  } else if (stage === 1) {
+    actionHtml += `<p class="text-muted" style="margin-bottom:12px">아르바이트가 DM을 발송하면 다음 단계로 이동해주세요.</p><div class="form-group"><label>DM 발송일</label><input type="date" id="p-dm-date" value="${inf.dm_sent_date||new Date().toISOString().split('T')[0]}"></div><button class="btn btn-primary" onclick="advanceWithDate('dm_sent_date','p-dm-date')">DM 발송 완료</button>`;
+  } else if (stage === 2) {
+    actionHtml += `<p class="text-muted" style="margin-bottom:12px">진행 의사를 확인해주세요.</p><div class="btn-group"><button class="btn btn-success" onclick="advanceStage()">✓ 진행 의사 있음</button><button class="btn btn-danger btn-sm" onclick="rejectInfluencer()">거절 (진행 의사 없음)</button></div>`;
+  } else if (stage === 3) {
+    actionHtml += `<p class="text-muted" style="margin-bottom:12px">계약서를 발송하고 완료되면 체크해주세요.</p><div class="form-group"><label>계약서 발송일</label><input type="date" id="p-contract-date" value="${inf.contract_sent_date||new Date().toISOString().split('T')[0]}"></div><button class="btn btn-primary" onclick="advanceWithDate('contract_sent_date','p-contract-date')">계약서 발송 완료</button>`;
+  } else if (stage === 4) {
+    actionHtml += `<p class="text-muted" style="margin-bottom:12px">제품을 발송해주세요.</p><div class="form-group"><label>제품 발송일</label><input type="date" id="p-product-date" value="${inf.product_sent_date||new Date().toISOString().split('T')[0]}"></div><button class="btn btn-primary" onclick="advanceWithDate('product_sent_date','p-product-date')">제품 발송 완료</button>`;
+  } else if (stage === 5) {
+    actionHtml += `<p class="text-muted" style="margin-bottom:12px">영상 완료 후 아래 정보를 수집해주세요.</p><div class="form-group"><label>광고 코드</label><input type="text" id="p-ad-code" value="${inf.ad_code||''}" placeholder="광고 코드 입력"></div><div class="form-group"><label>계좌번호</label><input type="text" id="p-account" value="${inf.account_number||''}" placeholder="은행명 + 계좌번호"></div><div class="checkbox-row"><input type="checkbox" id="p-id-received" ${inf.id_received==='Y'?'checked':''}><label for="p-id-received">신분증 수령 완료</label></div><button class="btn btn-primary mt-12" onclick="saveVideoInfo()">저장 후 다음 단계로</button>`;
+  } else if (stage === 6) {
+    actionHtml += `<p class="text-muted" style="margin-bottom:12px">광고 세팅 및 입금을 진행해주세요.</p><div class="form-group"><label>광고세팅 완료일</label><input type="date" id="p-ad-setup-date" value="${inf.ad_setup_date||new Date().toISOString().split('T')[0]}"></div><div class="form-group"><label>입금일</label><input type="date" id="p-payment-date" value="${inf.payment_date||new Date().toISOString().split('T')[0]}"></div><button class="btn btn-success" onclick="completeAll()">✓ 광고세팅 및 입금 완료</button>`;
+  } else {
+    actionHtml += `<p style="color:#22c55e;font-weight:600;margin-bottom:8px">✓ 모든 단계 완료</p><p class="text-muted" style="font-size:12px">광고코드: ${inf.ad_code||'-'} / 계좌: ${inf.account_number||'-'} / 신분증: ${inf.id_received==='Y'?'수령완료':'미수령'}</p>`;
+  }
+  document.getElementById('panel-body').innerHTML = tlHtml + infoHtml + actionHtml;
+}
+
+async function saveBasicInfo() { await api('update', { id: selectedId, name: document.getElementById('p-name').value, followers: document.getElementById('p-followers').value, recruited_date: document.getElementById('p-recruited').value, memo: document.getElementById('p-memo').value }); await loadData(); renderPanel(); }
+async function advanceStage() { const inf = influencers.find(i => i.id === selectedId); await api('update', { id: selectedId, stage: Number(inf.stage) + 1 }); await loadData(); renderPanel(); }
+async function advanceWithDate(field, inputId) { const inf = influencers.find(i => i.id === selectedId); const dateVal = document.getElementById(inputId)?.value || ''; await api('update', { id: selectedId, stage: Number(inf.stage) + 1, [field]: dateVal }); await loadData(); renderPanel(); }
+async function saveVideoInfo() { const adCode = document.getElementById('p-ad-code').value; const account = document.getElementById('p-account').value; const idReceived = document.getElementById('p-id-received').checked ? 'Y' : 'N'; if (!adCode || !account) return alert('광고 코드와 계좌번호를 입력해주세요.'); await api('update', { id: selectedId, stage: 6, ad_code: adCode, account_number: account, id_received: idReceived }); await loadData(); renderPanel(); }
+async function completeAll() { const adSetupDate = document.getElementById('p-ad-setup-date').value; const paymentDate = document.getElementById('p-payment-date').value; await api('update', { id: selectedId, stage: 8, status: 'done', ad_setup_date: adSetupDate, payment_date: paymentDate }); await loadData(); renderPanel(); }
+async function rejectInfluencer() { if (!confirm('이 인플루언서를 거절 처리할까요?')) return; await api('update', { id: selectedId, status: 'rejected' }); await loadData(); renderPanel(); }
+async function restoreInfluencer() { await api('update', { id: selectedId, status: 'active', stage: 0 }); await loadData(); renderPanel(); }
+
+function setThisMonth() { const now = new Date(); document.getElementById('settlement-month').value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`; renderSettlement(); }
+function renderSettlement() {
+  const month = document.getElementById('settlement-month').value;
+  if (!month) return;
+  const dmItems = influencers.filter(i => i.dm_sent_date && i.dm_sent_date.startsWith(month));
+  const doneItems = influencers.filter(i => (i.status === 'done' || Number(i.stage) >= 7) && i.payment_date && i.payment_date.startsWith(month));
+  const dmPay = dmItems.length * 2000, donePay = doneItems.length * 20000, total = dmPay + donePay;
+  document.getElementById('dm-count').innerHTML = `${dmItems.length}건 × 2,000원 = <b>${dmPay.toLocaleString()}원</b>`;
+  document.getElementById('complete-count').innerHTML = `${doneItems.length}건 × 20,000원 = <b>${donePay.toLocaleString()}원</b>`;
+  document.getElementById('total-pay').textContent = total.toLocaleString() + '원';
+  const allItems = [...new Set([...dmItems.map(i => i.id), ...doneItems.map(i => i.id)])].map(id => influencers.find(i => i.id === id));
+  const tbody = document.getElementById('settlement-table');
+  if (allItems.length === 0) { tbody.innerHTML = `<tr><td colspan="6"><div class="empty">해당 월 정산 내역이 없습니다.</div></td></tr>`; return; }
+  tbody.innerHTML = allItems.map(i => { const hasDM = i.dm_sent_date && i.dm_sent_date.startsWith(month); const hasDone = (i.status === 'done' || Number(i.stage) >= 7) && i.payment_date && i.payment_date.startsWith(month); return `<tr><td>@${i.instagram_id||i.nickname}</td><td>${i.name||'-'}</td><td>${hasDM?i.dm_sent_date:'-'}</td><td>${hasDone?i.payment_date:'-'}</td><td>${hasDM?'2,000원':'-'}</td><td>${hasDone?'20,000원':'-'}</td></tr>`; }).join('');
+}
+function copySettlement() {
+  const month = document.getElementById('settlement-month').value;
+  const dmCount = influencers.filter(i => i.dm_sent_date && i.dm_sent_date.startsWith(month)).length;
+  const doneCount = influencers.filter(i => (i.status === 'done' || Number(i.stage) >= 7) && i.payment_date && i.payment_date.startsWith(month)).length;
+  const total = (dmCount * 2000) + (doneCount * 20000);
+  navigator.clipboard.writeText(`[${month} 정산]\nDM 발송: ${dmCount}건 × 2,000원 = ${(dmCount*2000).toLocaleString()}원\n협찬 완료: ${doneCount}건 × 20,000원 = ${(doneCount*20000).toLocaleString()}원\n합계: ${total.toLocaleString()}원`).then(() => alert('클립보드에 복사됐습니다.'));
+}
+</script>
+</body>
+</html>
