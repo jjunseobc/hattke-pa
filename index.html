@@ -8,17 +8,21 @@
 :root {
   --bg: #0f0f0f; --surface: #1a1a1a; --surface2: #242424; --surface3: #2e2e2e;
   --border: #333; --text: #e8e8e8; --muted: #888; --primary: #4f8ef7;
-  --success: #28a745; --warning: #ffc107; --danger: #e74c3c; --orange: #fd7e14;
+  --success: #28a745; --warning: #ffc107; --danger: #e74c3c;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif; font-size: 14px; min-height: 100vh; }
-#app { display: none; }
+#app { display: block; }
 header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; gap: 32px; position: sticky; top: 0; z-index: 100; }
 header h1 { font-size: 16px; font-weight: 700; padding: 16px 0; white-space: nowrap; }
 nav { display: flex; gap: 0; }
 nav button { background: none; border: none; color: var(--muted); padding: 16px 20px; cursor: pointer; font-size: 14px; border-bottom: 2px solid transparent; transition: all 0.15s; }
 nav button.active { color: var(--primary); border-bottom-color: var(--primary); }
 nav button:hover:not(.active) { color: var(--text); }
+/* 로딩 인디케이터 */
+#loading-bar { height: 2px; background: var(--primary); position: fixed; top: 0; left: 0; width: 0; z-index: 999; transition: width 0.3s, opacity 0.3s; }
+#loading-bar.active { width: 70%; }
+#loading-bar.done { width: 100%; opacity: 0; }
 .tab { display: none; padding: 24px; max-width: 1200px; margin: 0 auto; }
 .tab.active { display: block; }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-bottom: 24px; }
@@ -47,6 +51,7 @@ tbody tr { border-bottom: 1px solid var(--border); cursor: pointer; transition: 
 tbody tr:last-child { border-bottom: none; }
 tbody tr:hover { background: var(--surface2); }
 tbody tr.selected { background: #1a2540; }
+tbody tr.optimistic { opacity: 0.6; }
 td { padding: 10px 14px; vertical-align: middle; }
 .stage-badge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; }
 .followers-text { color: var(--muted); font-size: 13px; }
@@ -104,6 +109,8 @@ textarea { resize: vertical; min-height: 70px; }
 .checkbox-row input[type="checkbox"] { width: auto; }
 .section-title { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; margin-top: 20px; }
 .info-row { display: flex; gap: 8px; align-items: center; }
+.sync-badge { font-size: 11px; color: var(--muted); padding: 2px 8px; border-radius: 10px; background: var(--surface2); display: none; }
+.sync-badge.show { display: inline-block; }
 @media (max-width: 600px) {
   .todo-grid { grid-template-columns: 1fr; }
   #detail-panel { width: 100%; right: -100%; }
@@ -116,6 +123,8 @@ textarea { resize: vertical; min-height: 70px; }
 </head>
 <body>
 
+<div id="loading-bar"></div>
+
 <div id="app">
   <header>
     <h1>🎯 해트케 인플루언서</h1>
@@ -124,6 +133,7 @@ textarea { resize: vertical; min-height: 70px; }
       <button onclick="switchTab('management', this)">인플루언서 관리</button>
       <button onclick="switchTab('settlement', this)">정산</button>
     </nav>
+    <span id="sync-badge" class="sync-badge">동기화 중...</span>
   </header>
 
   <div id="tab-dashboard" class="tab active">
@@ -149,7 +159,7 @@ textarea { resize: vertical; min-height: 70px; }
     <div class="table-wrap">
       <table>
         <thead><tr><th>계정명</th><th>이름</th><th>팔로워</th><th>모집일</th><th>단계</th><th>릴스</th></tr></thead>
-        <tbody id="influencer-table"></tbody>
+        <tbody id="influencer-table"><tr><td colspan="6"><div class="empty" style="padding:32px">데이터 로딩 중...</div></td></tr></tbody>
       </table>
     </div>
   </div>
@@ -215,13 +225,6 @@ const STAGES = [
 
 let influencers = [], selectedId = null, currentFilter = 'all';
 
-window.onload = () => {
-  document.getElementById('app').style.display = 'block';
-  document.getElementById('add-recruited-date').value = new Date().toISOString().split('T')[0];
-  setThisMonth();
-  loadData();
-};
-
 // ── 날짜 포맷 ──
 function formatDate(d) {
   if (!d) return '-';
@@ -229,6 +232,30 @@ function formatDate(d) {
   if (!s || s === 'undefined' || s === 'null') return '-';
   return s.length >= 10 ? s.slice(0, 10) : s;
 }
+
+function formatFollowers(n) {
+  const num = parseInt(String(n).replace(/[^0-9]/g, ''));
+  if (isNaN(num)) return n;
+  if (num >= 10000) return (num/10000).toFixed(1) + '만';
+  if (num >= 1000) return (num/1000).toFixed(1) + '천';
+  return String(num);
+}
+
+// ── 로딩바 ──
+function showLoading() {
+  const b = document.getElementById('loading-bar');
+  b.className = 'active';
+}
+function hideLoading() {
+  const b = document.getElementById('loading-bar');
+  b.className = 'done';
+  setTimeout(() => b.className = '', 400);
+}
+
+// ── 동기화 뱃지 ──
+let syncCount = 0;
+function syncStart() { syncCount++; document.getElementById('sync-badge').classList.add('show'); }
+function syncEnd() { syncCount = Math.max(0, syncCount-1); if (!syncCount) document.getElementById('sync-badge').classList.remove('show'); }
 
 // ── API ──
 async function api(action, data) {
@@ -244,19 +271,25 @@ async function api(action, data) {
   }
 }
 
-async function loadData() {
-  try {
-    const result = await api('getAll');
+// ── 로컬 state 헬퍼 ──
+function localGet(id) { return influencers.find(i => String(i.id) === String(id)); }
+function localUpdate(id, changes) { const inf = localGet(id); if (inf) Object.assign(inf, changes); }
+function localRemove(id) { influencers = influencers.filter(i => String(i.id) !== String(id)); }
+function localAdd(item) { influencers.unshift(item); }
+
+// ── 초기 로드 ──
+window.onload = () => {
+  document.getElementById('add-recruited-date').value = new Date().toISOString().split('T')[0];
+  setThisMonth();
+  showLoading();
+  api('getAll').then(result => {
+    hideLoading();
     if (result.success) {
       influencers = result.data.filter(r => r.status !== 'deleted');
       render();
-    } else {
-      console.warn('데이터 로딩 실패:', result.error);
     }
-  } catch (e) {
-    console.error('loadData 오류:', e);
-  }
-}
+  });
+};
 
 function switchTab(name, btn) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -321,7 +354,8 @@ function renderList() {
     const stage = i.status === 'rejected' ? {name:'거절됨',color:'#e74c3c'}
       : i.status === 'done' ? {name:'완료됨',color:'#22c55e'}
       : STAGES[Number(i.stage)] || STAGES[0];
-    return `<tr class="${String(selectedId)===String(i.id)?'selected':''}" onclick="openDetail('${i.id}')">
+    const isOpt = i._optimistic ? 'optimistic' : '';
+    return `<tr class="${String(selectedId)===String(i.id)?'selected':''} ${isOpt}" onclick="openDetail('${i.id}')">
       <td><b>@${i.instagram_id||i.nickname||'-'}</b></td>
       <td>${i.name||'-'}</td>
       <td class="followers-text">${i.followers?formatFollowers(i.followers):'-'}</td>
@@ -332,14 +366,7 @@ function renderList() {
   }).join('');
 }
 
-function formatFollowers(n) {
-  const num = parseInt(String(n).replace(/[^0-9]/g, ''));
-  if (isNaN(num)) return n;
-  if (num >= 10000) return (num/10000).toFixed(1) + '만';
-  if (num >= 1000) return (num/1000).toFixed(1) + '천';
-  return String(num);
-}
-
+// ── Add Modal ──
 function openAddModal() {
   ['insta-url','add-instagram-id','add-reels-url','add-name','add-followers'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('add-recruited-date').value = new Date().toISOString().split('T')[0];
@@ -350,11 +377,44 @@ function parseUrl() {
   const match = document.getElementById('insta-url').value.trim().match(/instagram\.com\/([^\/\?]+)/);
   if (match) { const u = match[1]; document.getElementById('add-instagram-id').value = u; document.getElementById('add-reels-url').value = `https://www.instagram.com/${u}/reels/`; }
 }
+
+// ★ Optimistic Add
 async function submitAdd() {
   const instagram_id = document.getElementById('add-instagram-id').value.trim();
   if (!instagram_id) return alert('URL을 먼저 입력해주세요.');
-  const result = await api('add', { instagram_id, nickname: instagram_id, name: document.getElementById('add-name').value.trim(), followers: document.getElementById('add-followers').value.trim(), reels_url: document.getElementById('add-reels-url').value.trim(), recruited_date: document.getElementById('add-recruited-date').value, stage: 0, status: 'active' });
-  if (result.success) { closeAddModal(); await loadData(); } else alert('오류: ' + result.error);
+
+  const tempId = 'temp_' + Date.now();
+  const newItem = {
+    id: tempId, _optimistic: true,
+    instagram_id, nickname: instagram_id,
+    name: document.getElementById('add-name').value.trim(),
+    followers: document.getElementById('add-followers').value.trim(),
+    reels_url: document.getElementById('add-reels-url').value.trim(),
+    recruited_date: document.getElementById('add-recruited-date').value,
+    stage: 0, status: 'active', memo: ''
+  };
+
+  // 즉시 화면 반영
+  localAdd(newItem);
+  closeAddModal();
+  render();
+
+  // 백그라운드 저장
+  syncStart();
+  const result = await api('add', newItem);
+  syncEnd();
+
+  if (result.success) {
+    // 임시 ID → 실제 ID로 교체
+    localUpdate(tempId, { id: result.id, _optimistic: false });
+    selectedId = result.id; // 선택 상태 업데이트
+    render();
+  } else {
+    // 실패 시 롤백
+    localRemove(tempId);
+    render();
+    alert('추가 실패: ' + result.error);
+  }
 }
 
 // ── Detail Panel ──
@@ -371,14 +431,13 @@ function closePanel() {
 }
 
 function renderPanel() {
-  const inf = influencers.find(i => String(i.id) === String(selectedId));
+  const inf = localGet(selectedId);
   if (!inf) return;
   const stage = Number(inf.stage);
   document.getElementById('panel-title').textContent = '@' + (inf.instagram_id || inf.nickname);
 
   const dateFields = [null, null, 'dm_sent_date', null, 'contract_sent_date', 'product_sent_date', null, 'ad_setup_date', 'payment_date'];
 
-  // Timeline
   let tlHtml = '<div class="section-title">진행 단계</div><div class="timeline">';
   STAGES.forEach((s, idx) => {
     let dc = idx < stage ? 'done' : idx === stage ? 'current' : 'pending';
@@ -386,23 +445,18 @@ function renderPanel() {
     if (inf.status === 'done') dc = 'done';
     const lc = idx < stage ? 'done' : idx === stage ? 'current' : '';
     const df = dateFields[idx];
-    const rawDate = df ? inf[df] : (idx === 0 ? inf.recruited_date : '');
-    const dv = formatDate(rawDate);
-    tlHtml += `<div class="timeline-item">
-      <div class="timeline-dot ${dc}">${(idx < stage || inf.status === 'done') ? '✓' : idx+1}</div>
-      <div class="timeline-label ${lc}">${s.name}${dv !== '-' ? `<span class="timeline-date">${dv}</span>` : ''}</div>
-    </div>`;
+    const dv = formatDate(df ? inf[df] : (idx === 0 ? inf.recruited_date : ''));
+    tlHtml += `<div class="timeline-item"><div class="timeline-dot ${dc}">${(idx < stage || inf.status === 'done') ? '✓' : idx+1}</div><div class="timeline-label ${lc}">${s.name}${dv !== '-' ? `<span class="timeline-date">${dv}</span>` : ''}</div></div>`;
     if (idx < STAGES.length - 1) tlHtml += '<div class="timeline-line"></div>';
   });
   if (inf.status === 'rejected') tlHtml += '<div class="timeline-item"><div class="timeline-dot" style="background:#e74c3c;color:#fff">✕</div><div class="timeline-label" style="color:#e74c3c">거절됨</div></div>';
   tlHtml += '</div>';
 
-  // Basic info
-  const recruitedVal = formatDate(inf.recruited_date);
+  const rv = formatDate(inf.recruited_date);
   const infoHtml = `<div class="section-title">기본 정보</div>
     <div class="form-group"><label>이름</label><input type="text" id="p-name" value="${inf.name||''}"></div>
     <div class="form-group"><label>팔로워 수</label><input type="text" id="p-followers" value="${inf.followers||''}"></div>
-    <div class="form-group"><label>모집일</label><input type="date" id="p-recruited" value="${recruitedVal !== '-' ? recruitedVal : ''}"></div>
+    <div class="form-group"><label>모집일</label><input type="date" id="p-recruited" value="${rv !== '-' ? rv : ''}"></div>
     <div class="form-group"><label>메모</label><textarea id="p-memo">${inf.memo||''}</textarea></div>
     <div class="info-row">
       <button class="btn btn-outline btn-sm" onclick="saveBasicInfo()">기본 정보 저장</button>
@@ -410,8 +464,8 @@ function renderPanel() {
     </div>
     <hr class="divider">`;
 
-  // Actions
   let actionHtml = '<div class="section-title">단계 액션</div>';
+  const today = new Date().toISOString().split('T')[0];
   if (inf.status === 'rejected') {
     actionHtml += `<p class="text-muted" style="margin-bottom:12px">거절 처리된 인플루언서입니다.</p><button class="btn btn-outline btn-sm" onclick="restoreInfluencer()">↩ 복구 (모집됨으로)</button>`;
   } else if (inf.status === 'done') {
@@ -419,17 +473,18 @@ function renderPanel() {
   } else if (stage === 0) {
     actionHtml += `<p class="text-muted" style="margin-bottom:12px">협찬 대상으로 선정하면 아르바이트가 DM 발송을 진행합니다.</p><div class="btn-group"><button class="btn btn-success" onclick="advanceStage()">✓ 협찬 대상으로 선정</button><button class="btn btn-danger btn-sm" onclick="rejectInfluencer()">거절</button></div>`;
   } else if (stage === 1) {
-    actionHtml += `<p class="text-muted" style="margin-bottom:12px">아르바이트가 DM을 발송하면 다음 단계로 이동해주세요.</p><div class="form-group"><label>DM 발송일</label><input type="date" id="p-dm-date" value="${formatDate(inf.dm_sent_date)!=='-'?formatDate(inf.dm_sent_date):new Date().toISOString().split('T')[0]}"></div><button class="btn btn-primary" onclick="advanceWithDate('dm_sent_date','p-dm-date')">DM 발송 완료</button>`;
+    const v = formatDate(inf.dm_sent_date); actionHtml += `<p class="text-muted" style="margin-bottom:12px">아르바이트가 DM을 발송하면 다음 단계로 이동해주세요.</p><div class="form-group"><label>DM 발송일</label><input type="date" id="p-dm-date" value="${v!=='-'?v:today}"></div><button class="btn btn-primary" onclick="advanceWithDate('dm_sent_date','p-dm-date')">DM 발송 완료</button>`;
   } else if (stage === 2) {
     actionHtml += `<p class="text-muted" style="margin-bottom:12px">진행 의사를 확인해주세요.</p><div class="btn-group"><button class="btn btn-success" onclick="advanceStage()">✓ 진행 의사 있음</button><button class="btn btn-danger btn-sm" onclick="rejectInfluencer()">거절 (진행 의사 없음)</button></div>`;
   } else if (stage === 3) {
-    actionHtml += `<p class="text-muted" style="margin-bottom:12px">계약서를 발송하고 완료되면 체크해주세요.</p><div class="form-group"><label>계약서 발송일</label><input type="date" id="p-contract-date" value="${formatDate(inf.contract_sent_date)!=='-'?formatDate(inf.contract_sent_date):new Date().toISOString().split('T')[0]}"></div><button class="btn btn-primary" onclick="advanceWithDate('contract_sent_date','p-contract-date')">계약서 발송 완료</button>`;
+    const v = formatDate(inf.contract_sent_date); actionHtml += `<p class="text-muted" style="margin-bottom:12px">계약서를 발송하고 완료되면 체크해주세요.</p><div class="form-group"><label>계약서 발송일</label><input type="date" id="p-contract-date" value="${v!=='-'?v:today}"></div><button class="btn btn-primary" onclick="advanceWithDate('contract_sent_date','p-contract-date')">계약서 발송 완료</button>`;
   } else if (stage === 4) {
-    actionHtml += `<p class="text-muted" style="margin-bottom:12px">제품을 발송해주세요.</p><div class="form-group"><label>제품 발송일</label><input type="date" id="p-product-date" value="${formatDate(inf.product_sent_date)!=='-'?formatDate(inf.product_sent_date):new Date().toISOString().split('T')[0]}"></div><button class="btn btn-primary" onclick="advanceWithDate('product_sent_date','p-product-date')">제품 발송 완료</button>`;
+    const v = formatDate(inf.product_sent_date); actionHtml += `<p class="text-muted" style="margin-bottom:12px">제품을 발송해주세요.</p><div class="form-group"><label>제품 발송일</label><input type="date" id="p-product-date" value="${v!=='-'?v:today}"></div><button class="btn btn-primary" onclick="advanceWithDate('product_sent_date','p-product-date')">제품 발송 완료</button>`;
   } else if (stage === 5) {
     actionHtml += `<p class="text-muted" style="margin-bottom:12px">영상 완료 후 아래 정보를 수집해주세요.</p><div class="form-group"><label>광고 코드</label><input type="text" id="p-ad-code" value="${inf.ad_code||''}" placeholder="광고 코드 입력"></div><div class="form-group"><label>계좌번호</label><input type="text" id="p-account" value="${inf.account_number||''}" placeholder="은행명 + 계좌번호"></div><div class="checkbox-row"><input type="checkbox" id="p-id-received" ${inf.id_received==='Y'?'checked':''}><label for="p-id-received">신분증 수령 완료</label></div><button class="btn btn-primary mt-12" onclick="saveVideoInfo()">저장 후 다음 단계로</button>`;
   } else if (stage === 6) {
-    actionHtml += `<p class="text-muted" style="margin-bottom:12px">광고 세팅 및 인플루언서 입금을 진행해주세요.</p><div class="form-group"><label>광고세팅 완료일</label><input type="date" id="p-ad-setup-date" value="${formatDate(inf.ad_setup_date)!=='-'?formatDate(inf.ad_setup_date):new Date().toISOString().split('T')[0]}"></div><div class="form-group"><label>입금일</label><input type="date" id="p-payment-date" value="${formatDate(inf.payment_date)!=='-'?formatDate(inf.payment_date):new Date().toISOString().split('T')[0]}"></div><button class="btn btn-success" onclick="completeAll()">✓ 광고세팅 및 입금 완료</button>`;
+    const vs = formatDate(inf.ad_setup_date), vp = formatDate(inf.payment_date);
+    actionHtml += `<p class="text-muted" style="margin-bottom:12px">광고 세팅 및 인플루언서 입금을 진행해주세요.</p><div class="form-group"><label>광고세팅 완료일</label><input type="date" id="p-ad-setup-date" value="${vs!=='-'?vs:today}"></div><div class="form-group"><label>입금일</label><input type="date" id="p-payment-date" value="${vp!=='-'?vp:today}"></div><button class="btn btn-success" onclick="completeAll()">✓ 광고세팅 및 입금 완료</button>`;
   } else {
     actionHtml += `<p style="color:#22c55e;font-weight:600;margin-bottom:8px">✓ 모든 단계 완료</p><p class="text-muted" style="font-size:12px">광고코드: ${inf.ad_code||'-'} / 계좌: ${inf.account_number||'-'} / 신분증: ${inf.id_received==='Y'?'수령완료':'미수령'}</p>`;
   }
@@ -437,58 +492,130 @@ function renderPanel() {
   document.getElementById('panel-body').innerHTML = tlHtml + infoHtml + actionHtml;
 }
 
+// ★ Optimistic 기본정보 저장
 async function saveBasicInfo() {
-  await api('update', { id: selectedId, name: document.getElementById('p-name').value, followers: document.getElementById('p-followers').value, recruited_date: document.getElementById('p-recruited').value, memo: document.getElementById('p-memo').value });
-  await loadData(); renderPanel();
+  const name = document.getElementById('p-name').value;
+  const followers = document.getElementById('p-followers').value;
+  const recruited_date = document.getElementById('p-recruited').value;
+  const memo = document.getElementById('p-memo').value;
+  const backup = { ...localGet(selectedId) };
+
+  localUpdate(selectedId, { name, followers, recruited_date, memo });
+  renderPanel(); renderDashboard();
+
+  syncStart();
+  const r = await api('update', { id: selectedId, name, followers, recruited_date, memo });
+  syncEnd();
+  if (!r.success) { localUpdate(selectedId, backup); renderPanel(); alert('저장 실패: ' + r.error); }
 }
+
+// ★ Optimistic 단계 이동
 async function advanceStage() {
-  const inf = influencers.find(i => String(i.id) === String(selectedId));
-  await api('update', { id: selectedId, stage: Number(inf.stage) + 1 });
-  await loadData(); renderPanel();
+  const inf = localGet(selectedId);
+  const prev = Number(inf.stage), next = prev + 1;
+  localUpdate(selectedId, { stage: next });
+  render(); renderPanel();
+
+  syncStart();
+  const r = await api('update', { id: selectedId, stage: next });
+  syncEnd();
+  if (!r.success) { localUpdate(selectedId, { stage: prev }); render(); renderPanel(); alert('저장 실패: ' + r.error); }
 }
+
 async function advanceWithDate(field, inputId) {
-  const inf = influencers.find(i => String(i.id) === String(selectedId));
+  const inf = localGet(selectedId);
+  const prev = Number(inf.stage), next = prev + 1;
   const dateVal = document.getElementById(inputId)?.value || '';
-  await api('update', { id: selectedId, stage: Number(inf.stage) + 1, [field]: dateVal });
-  await loadData(); renderPanel();
+  localUpdate(selectedId, { stage: next, [field]: dateVal });
+  render(); renderPanel();
+
+  syncStart();
+  const r = await api('update', { id: selectedId, stage: next, [field]: dateVal });
+  syncEnd();
+  if (!r.success) { localUpdate(selectedId, { stage: prev, [field]: inf[field] }); render(); renderPanel(); alert('저장 실패: ' + r.error); }
 }
+
 async function saveVideoInfo() {
   const adCode = document.getElementById('p-ad-code').value;
   const account = document.getElementById('p-account').value;
   const idReceived = document.getElementById('p-id-received').checked ? 'Y' : 'N';
   if (!adCode || !account) return alert('광고 코드와 계좌번호를 입력해주세요.');
-  const inf = influencers.find(i => String(i.id) === String(selectedId));
-  await api('update', { id: selectedId, stage: Number(inf.stage) + 1, ad_code: adCode, account_number: account, id_received: idReceived });
-  await loadData(); renderPanel();
+  const inf = localGet(selectedId);
+  const prev = Number(inf.stage), next = prev + 1;
+  localUpdate(selectedId, { stage: next, ad_code: adCode, account_number: account, id_received: idReceived });
+  render(); renderPanel();
+
+  syncStart();
+  const r = await api('update', { id: selectedId, stage: next, ad_code: adCode, account_number: account, id_received: idReceived });
+  syncEnd();
+  if (!r.success) { localUpdate(selectedId, { stage: prev }); render(); renderPanel(); alert('저장 실패: ' + r.error); }
 }
+
 async function completeAll() {
   const adSetupDate = document.getElementById('p-ad-setup-date').value;
   const paymentDate = document.getElementById('p-payment-date').value;
-  await api('update', { id: selectedId, stage: 8, status: 'done', ad_setup_date: adSetupDate, payment_date: paymentDate });
-  await loadData(); renderPanel();
+  const backup = { ...localGet(selectedId) };
+  localUpdate(selectedId, { stage: 8, status: 'done', ad_setup_date: adSetupDate, payment_date: paymentDate });
+  render(); renderPanel();
+
+  syncStart();
+  const r = await api('update', { id: selectedId, stage: 8, status: 'done', ad_setup_date: adSetupDate, payment_date: paymentDate });
+  syncEnd();
+  if (!r.success) { localUpdate(selectedId, backup); render(); renderPanel(); alert('저장 실패: ' + r.error); }
 }
+
 async function rejectInfluencer() {
   if (!confirm('이 인플루언서를 거절 처리할까요?')) return;
-  await api('update', { id: selectedId, status: 'rejected' });
-  await loadData(); renderPanel();
+  const backup = { ...localGet(selectedId) };
+  localUpdate(selectedId, { status: 'rejected' });
+  render(); renderPanel();
+
+  syncStart();
+  const r = await api('update', { id: selectedId, status: 'rejected' });
+  syncEnd();
+  if (!r.success) { localUpdate(selectedId, backup); render(); renderPanel(); alert('저장 실패: ' + r.error); }
 }
+
 async function restoreInfluencer() {
-  await api('update', { id: selectedId, status: 'active', stage: 0 });
-  await loadData(); renderPanel();
+  const backup = { ...localGet(selectedId) };
+  localUpdate(selectedId, { status: 'active', stage: 0 });
+  render(); renderPanel();
+
+  syncStart();
+  const r = await api('update', { id: selectedId, status: 'active', stage: 0 });
+  syncEnd();
+  if (!r.success) { localUpdate(selectedId, backup); render(); renderPanel(); alert('저장 실패: ' + r.error); }
 }
+
+// ★ Optimistic Delete
 async function deleteInfluencer() {
   if (!confirm('이 인플루언서를 완전히 삭제할까요?\n삭제 후 복구가 불가능합니다.')) return;
+  const deletedId = selectedId;
+  const backup = { ...localGet(deletedId) };
+
+  // 즉시 삭제
+  localRemove(deletedId);
+  closePanel();
+  render();
+
+  // 백그라운드 삭제
+  syncStart();
   try {
     const url = new URL(SCRIPT_URL);
     url.searchParams.set('action', 'delete');
-    url.searchParams.set('id', selectedId);
+    url.searchParams.set('id', deletedId);
     const res = await fetch(url.toString());
     const r = await res.json();
-    if (r.success) { closePanel(); await loadData(); }
-    else alert('삭제 실패: ' + r.error);
-  } catch(e) { alert('삭제 오류: ' + e.message); }
+    syncEnd();
+    if (!r.success) { localAdd(backup); render(); alert('삭제 실패: ' + r.error); }
+  } catch(e) {
+    syncEnd();
+    localAdd(backup); render();
+    alert('삭제 오류: ' + e.message);
+  }
 }
 
+// ── 정산 ──
 function setThisMonth() { const now = new Date(); document.getElementById('settlement-month').value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`; renderSettlement(); }
 function renderSettlement() {
   const month = document.getElementById('settlement-month').value;
