@@ -162,7 +162,7 @@ textarea { resize: vertical; min-height: 70px; }
   <div id="tab-management" class="tab">
     <div class="toolbar">
       <input type="text" id="search-input" placeholder="계정명 또는 이름 검색..." oninput="renderList()">
-      <button class="btn btn-primary" onclick="openAddModal()">+ 인플루언서 추가</button>
+      <button id="add-btn" class="btn btn-primary" onclick="openAddModal()">+ 인플루언서 추가</button>
     </div>
     <div id="filter-tabs" class="filter-tabs"></div>
     <div class="table-wrap">
@@ -261,17 +261,32 @@ function resetUrl() {
   document.getElementById('app').style.display = 'none';
 }
 
+// ── API (에러 핸들링 포함) ──
 async function api(action, data) {
-  const url = new URL(SCRIPT_URL);
-  url.searchParams.set('action', action);
-  if (data) url.searchParams.set('data', JSON.stringify(data));
-  const res = await fetch(url.toString());
-  return await res.json();
+  try {
+    const url = new URL(SCRIPT_URL);
+    url.searchParams.set('action', action);
+    if (data) url.searchParams.set('data', JSON.stringify(data));
+    const res = await fetch(url.toString());
+    return await res.json();
+  } catch (e) {
+    console.error('API 오류:', e);
+    return { success: false, error: e.message };
+  }
 }
 
 async function loadData() {
-  const result = await api('getAll');
-  if (result.success) { influencers = result.data.filter(r => r.status !== 'deleted'); render(); }
+  try {
+    const result = await api('getAll');
+    if (result.success) {
+      influencers = result.data.filter(r => r.status !== 'deleted');
+      render();
+    } else {
+      console.warn('데이터 로딩 실패:', result.error);
+    }
+  } catch (e) {
+    console.error('loadData 오류:', e);
+  }
 }
 
 function switchTab(name, btn) {
@@ -296,12 +311,14 @@ function renderDashboard() {
   html += `<div class="card" style="border-top:3px solid #e74c3c"><div class="card-count" style="color:#e74c3c">${rejected.length}</div><div class="card-label">거절됨</div></div>`;
   document.getElementById('stage-cards').innerHTML = html;
 
-  const bossItems = active.filter(i => Number(i.stage) === 0 || Number(i.stage) === 7);
+  // 내 할 일: 모집됨(0) 선정 대기 + 영상완료(6) 광고세팅 대기
+  const bossItems = active.filter(i => Number(i.stage) === 0 || Number(i.stage) === 6);
   document.getElementById('boss-todo').innerHTML = bossItems.length === 0
     ? '<div class="text-muted" style="padding:8px 0">할 일 없음 ✓</div>'
     : bossItems.map(i => { const s = STAGES[Number(i.stage)]; return `<div class="todo-item" onclick="openDetail('${i.id}')"><span class="todo-name">@${i.instagram_id||i.nickname}</span><span class="todo-stage" style="background:${s.color}22;color:${s.color}">${s.name}</span></div>`; }).join('');
 
-  const partItems = active.filter(i => { const s = Number(i.stage); return s >= 1 && s <= 6; });
+  // 아르바이트 할 일: 협찬대상선정(1) ~ 제품발송(5)
+  const partItems = active.filter(i => Number(i.stage) >= 1 && Number(i.stage) <= 5);
   document.getElementById('part-todo').innerHTML = partItems.length === 0
     ? '<div class="text-muted" style="padding:8px 0">할 일 없음 ✓</div>'
     : partItems.map(i => { const s = STAGES[Number(i.stage)]; return `<div class="todo-item" onclick="openDetail('${i.id}')"><span class="todo-name">@${i.instagram_id||i.nickname}</span><span class="todo-stage" style="background:${s.color}22;color:${s.color}">${s.name}</span></div>`; }).join('');
@@ -316,6 +333,8 @@ function renderFilterTabs() {
   });
   const rejCount = influencers.filter(i => i.status === 'rejected').length;
   html += `<div class="filter-tab ${currentFilter==='rejected'?'active':''}" onclick="setFilter('rejected')">거절됨 (${rejCount})</div>`;
+  const doneCount = influencers.filter(i => i.status === 'done').length;
+  html += `<div class="filter-tab ${currentFilter==='done'?'active':''}" onclick="setFilter('done')">완료됨 (${doneCount})</div>`;
   document.getElementById('filter-tabs').innerHTML = html;
 }
 
@@ -325,13 +344,16 @@ function jumpToFilter(id) { switchTab('management', document.querySelectorAll('n
 function renderList() {
   const search = (document.getElementById('search-input').value || '').toLowerCase();
   let list = currentFilter === 'rejected' ? influencers.filter(i => i.status === 'rejected')
+    : currentFilter === 'done' ? influencers.filter(i => i.status === 'done')
     : currentFilter !== 'all' ? influencers.filter(i => i.status === 'active' && Number(i.stage) === currentFilter)
     : influencers.filter(i => i.status === 'active');
   if (search) list = list.filter(i => (i.instagram_id||'').toLowerCase().includes(search) || (i.name||'').toLowerCase().includes(search));
   const tbody = document.getElementById('influencer-table');
   if (list.length === 0) { tbody.innerHTML = `<tr><td colspan="6"><div class="empty">인플루언서가 없습니다.</div></td></tr>`; return; }
   tbody.innerHTML = list.map(i => {
-    const stage = i.status === 'rejected' ? {name:'거절됨',color:'#e74c3c'} : STAGES[Number(i.stage)] || STAGES[0];
+    const stage = i.status === 'rejected' ? {name:'거절됨',color:'#e74c3c'}
+      : i.status === 'done' ? {name:'완료됨',color:'#22c55e'}
+      : STAGES[Number(i.stage)] || STAGES[0];
     return `<tr class="${selectedId===i.id?'selected':''}" onclick="openDetail('${i.id}')">
       <td><b>@${i.instagram_id||i.nickname||'-'}</b></td><td>${i.name||'-'}</td>
       <td class="followers-text">${i.followers?formatFollowers(i.followers):'-'}</td>
@@ -380,9 +402,10 @@ function renderPanel() {
   STAGES.forEach((s, idx) => {
     let dc = idx < stage ? 'done' : idx === stage ? 'current' : 'pending';
     if (inf.status === 'rejected') dc = idx < stage ? 'done' : 'pending';
+    if (inf.status === 'done') dc = 'done';
     const lc = idx < stage ? 'done' : idx === stage ? 'current' : '';
     const df = dateFields[idx]; const dv = df ? inf[df] : (idx === 0 ? inf.recruited_date : '');
-    tlHtml += `<div class="timeline-item"><div class="timeline-dot ${dc}">${idx < stage ? '✓' : idx+1}</div><div class="timeline-label ${lc}">${s.name}${dv ? `<span class="timeline-date">${dv}</span>` : ''}</div></div>`;
+    tlHtml += `<div class="timeline-item"><div class="timeline-dot ${dc}">${(idx < stage || inf.status === 'done') ? '✓' : idx+1}</div><div class="timeline-label ${lc}">${s.name}${dv ? `<span class="timeline-date">${dv}</span>` : ''}</div></div>`;
     if (idx < STAGES.length - 1) tlHtml += '<div class="timeline-line"></div>';
   });
   if (inf.status === 'rejected') tlHtml += '<div class="timeline-item"><div class="timeline-dot" style="background:#e74c3c;color:#fff">✕</div><div class="timeline-label" style="color:#e74c3c">거절됨</div></div>';
@@ -398,6 +421,8 @@ function renderPanel() {
   let actionHtml = '<div class="section-title">단계 액션</div>';
   if (inf.status === 'rejected') {
     actionHtml += `<p class="text-muted" style="margin-bottom:12px">거절 처리된 인플루언서입니다.</p><button class="btn btn-outline btn-sm" onclick="restoreInfluencer()">↩ 복구 (모집됨으로)</button>`;
+  } else if (inf.status === 'done') {
+    actionHtml += `<p style="color:#22c55e;font-weight:600;margin-bottom:8px">✓ 모든 단계 완료</p><p class="text-muted" style="font-size:12px">광고코드: ${inf.ad_code||'-'} / 계좌: ${inf.account_number||'-'} / 신분증: ${inf.id_received==='Y'?'수령완료':'미수령'}</p>`;
   } else if (stage === 0) {
     actionHtml += `<p class="text-muted" style="margin-bottom:12px">협찬 대상으로 선정하면 아르바이트가 DM 발송을 진행합니다.</p><div class="btn-group"><button class="btn btn-success" onclick="advanceStage()">✓ 협찬 대상으로 선정</button><button class="btn btn-danger btn-sm" onclick="rejectInfluencer()">거절</button></div>`;
   } else if (stage === 1) {
@@ -411,7 +436,7 @@ function renderPanel() {
   } else if (stage === 5) {
     actionHtml += `<p class="text-muted" style="margin-bottom:12px">영상 완료 후 아래 정보를 수집해주세요.</p><div class="form-group"><label>광고 코드</label><input type="text" id="p-ad-code" value="${inf.ad_code||''}" placeholder="광고 코드 입력"></div><div class="form-group"><label>계좌번호</label><input type="text" id="p-account" value="${inf.account_number||''}" placeholder="은행명 + 계좌번호"></div><div class="checkbox-row"><input type="checkbox" id="p-id-received" ${inf.id_received==='Y'?'checked':''}><label for="p-id-received">신분증 수령 완료</label></div><button class="btn btn-primary mt-12" onclick="saveVideoInfo()">저장 후 다음 단계로</button>`;
   } else if (stage === 6) {
-    actionHtml += `<p class="text-muted" style="margin-bottom:12px">광고 세팅 및 입금을 진행해주세요.</p><div class="form-group"><label>광고세팅 완료일</label><input type="date" id="p-ad-setup-date" value="${inf.ad_setup_date||new Date().toISOString().split('T')[0]}"></div><div class="form-group"><label>입금일</label><input type="date" id="p-payment-date" value="${inf.payment_date||new Date().toISOString().split('T')[0]}"></div><button class="btn btn-success" onclick="completeAll()">✓ 광고세팅 및 입금 완료</button>`;
+    actionHtml += `<p class="text-muted" style="margin-bottom:12px">광고 세팅 및 인플루언서 입금을 진행해주세요.</p><div class="form-group"><label>광고세팅 완료일</label><input type="date" id="p-ad-setup-date" value="${inf.ad_setup_date||new Date().toISOString().split('T')[0]}"></div><div class="form-group"><label>입금일</label><input type="date" id="p-payment-date" value="${inf.payment_date||new Date().toISOString().split('T')[0]}"></div><button class="btn btn-success" onclick="completeAll()">✓ 광고세팅 및 입금 완료</button>`;
   } else {
     actionHtml += `<p style="color:#22c55e;font-weight:600;margin-bottom:8px">✓ 모든 단계 완료</p><p class="text-muted" style="font-size:12px">광고코드: ${inf.ad_code||'-'} / 계좌: ${inf.account_number||'-'} / 신분증: ${inf.id_received==='Y'?'수령완료':'미수령'}</p>`;
   }
@@ -421,8 +446,21 @@ function renderPanel() {
 async function saveBasicInfo() { await api('update', { id: selectedId, name: document.getElementById('p-name').value, followers: document.getElementById('p-followers').value, recruited_date: document.getElementById('p-recruited').value, memo: document.getElementById('p-memo').value }); await loadData(); renderPanel(); }
 async function advanceStage() { const inf = influencers.find(i => i.id === selectedId); await api('update', { id: selectedId, stage: Number(inf.stage) + 1 }); await loadData(); renderPanel(); }
 async function advanceWithDate(field, inputId) { const inf = influencers.find(i => i.id === selectedId); const dateVal = document.getElementById(inputId)?.value || ''; await api('update', { id: selectedId, stage: Number(inf.stage) + 1, [field]: dateVal }); await loadData(); renderPanel(); }
-async function saveVideoInfo() { const adCode = document.getElementById('p-ad-code').value; const account = document.getElementById('p-account').value; const idReceived = document.getElementById('p-id-received').checked ? 'Y' : 'N'; if (!adCode || !account) return alert('광고 코드와 계좌번호를 입력해주세요.'); await api('update', { id: selectedId, stage: 6, ad_code: adCode, account_number: account, id_received: idReceived }); await loadData(); renderPanel(); }
-async function completeAll() { const adSetupDate = document.getElementById('p-ad-setup-date').value; const paymentDate = document.getElementById('p-payment-date').value; await api('update', { id: selectedId, stage: 8, status: 'done', ad_setup_date: adSetupDate, payment_date: paymentDate }); await loadData(); renderPanel(); }
+async function saveVideoInfo() {
+  const adCode = document.getElementById('p-ad-code').value;
+  const account = document.getElementById('p-account').value;
+  const idReceived = document.getElementById('p-id-received').checked ? 'Y' : 'N';
+  if (!adCode || !account) return alert('광고 코드와 계좌번호를 입력해주세요.');
+  const inf = influencers.find(i => i.id === selectedId);
+  await api('update', { id: selectedId, stage: Number(inf.stage) + 1, ad_code: adCode, account_number: account, id_received: idReceived });
+  await loadData(); renderPanel();
+}
+async function completeAll() {
+  const adSetupDate = document.getElementById('p-ad-setup-date').value;
+  const paymentDate = document.getElementById('p-payment-date').value;
+  await api('update', { id: selectedId, stage: 8, status: 'done', ad_setup_date: adSetupDate, payment_date: paymentDate });
+  await loadData(); renderPanel();
+}
 async function rejectInfluencer() { if (!confirm('이 인플루언서를 거절 처리할까요?')) return; await api('update', { id: selectedId, status: 'rejected' }); await loadData(); renderPanel(); }
 async function restoreInfluencer() { await api('update', { id: selectedId, status: 'active', stage: 0 }); await loadData(); renderPanel(); }
 
@@ -431,7 +469,7 @@ function renderSettlement() {
   const month = document.getElementById('settlement-month').value;
   if (!month) return;
   const dmItems = influencers.filter(i => i.dm_sent_date && i.dm_sent_date.startsWith(month));
-  const doneItems = influencers.filter(i => (i.status === 'done' || Number(i.stage) >= 7) && i.payment_date && i.payment_date.startsWith(month));
+  const doneItems = influencers.filter(i => i.status === 'done' && i.payment_date && i.payment_date.startsWith(month));
   const dmPay = dmItems.length * 2000, donePay = doneItems.length * 20000, total = dmPay + donePay;
   document.getElementById('dm-count').innerHTML = `${dmItems.length}건 × 2,000원 = <b>${dmPay.toLocaleString()}원</b>`;
   document.getElementById('complete-count').innerHTML = `${doneItems.length}건 × 20,000원 = <b>${donePay.toLocaleString()}원</b>`;
@@ -439,12 +477,12 @@ function renderSettlement() {
   const allItems = [...new Set([...dmItems.map(i => i.id), ...doneItems.map(i => i.id)])].map(id => influencers.find(i => i.id === id));
   const tbody = document.getElementById('settlement-table');
   if (allItems.length === 0) { tbody.innerHTML = `<tr><td colspan="6"><div class="empty">해당 월 정산 내역이 없습니다.</div></td></tr>`; return; }
-  tbody.innerHTML = allItems.map(i => { const hasDM = i.dm_sent_date && i.dm_sent_date.startsWith(month); const hasDone = (i.status === 'done' || Number(i.stage) >= 7) && i.payment_date && i.payment_date.startsWith(month); return `<tr><td>@${i.instagram_id||i.nickname}</td><td>${i.name||'-'}</td><td>${hasDM?i.dm_sent_date:'-'}</td><td>${hasDone?i.payment_date:'-'}</td><td>${hasDM?'2,000원':'-'}</td><td>${hasDone?'20,000원':'-'}</td></tr>`; }).join('');
+  tbody.innerHTML = allItems.map(i => { const hasDM = i.dm_sent_date && i.dm_sent_date.startsWith(month); const hasDone = i.status === 'done' && i.payment_date && i.payment_date.startsWith(month); return `<tr><td>@${i.instagram_id||i.nickname}</td><td>${i.name||'-'}</td><td>${hasDM?i.dm_sent_date:'-'}</td><td>${hasDone?i.payment_date:'-'}</td><td>${hasDM?'2,000원':'-'}</td><td>${hasDone?'20,000원':'-'}</td></tr>`; }).join('');
 }
 function copySettlement() {
   const month = document.getElementById('settlement-month').value;
   const dmCount = influencers.filter(i => i.dm_sent_date && i.dm_sent_date.startsWith(month)).length;
-  const doneCount = influencers.filter(i => (i.status === 'done' || Number(i.stage) >= 7) && i.payment_date && i.payment_date.startsWith(month)).length;
+  const doneCount = influencers.filter(i => i.status === 'done' && i.payment_date && i.payment_date.startsWith(month)).length;
   const total = (dmCount * 2000) + (doneCount * 20000);
   navigator.clipboard.writeText(`[${month} 정산]\nDM 발송: ${dmCount}건 × 2,000원 = ${(dmCount*2000).toLocaleString()}원\n협찬 완료: ${doneCount}건 × 20,000원 = ${(doneCount*20000).toLocaleString()}원\n합계: ${total.toLocaleString()}원`).then(() => alert('클립보드에 복사됐습니다.'));
 }
