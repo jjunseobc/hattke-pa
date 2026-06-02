@@ -116,6 +116,11 @@ input[type=file]{background:var(--surface2);border:1px dashed var(--border);colo
 .info-row{display:flex;gap:7px;align-items:center}
 .copy-row{display:flex;gap:6px;align-items:center}
 .copy-row input{flex:1}
+.role-section{margin-bottom:14px}
+.role-header{font-size:12px;font-weight:700;margin-bottom:7px;display:flex;align-items:center;gap:5px}
+.role-header.part{color:#ffc107}
+.role-header.boss{color:#e74c3c}
+.role-section .cards{margin-bottom:0}
 @media(max-width:600px){
   .todo-grid{grid-template-columns:1fr}
   #detail-panel{width:100%;right:-100%}
@@ -139,7 +144,7 @@ input[type=file]{background:var(--surface2);border:1px dashed var(--border);colo
   </header>
 
   <div id="tab-dashboard" class="tab active">
-    <div id="stage-cards" class="cards"></div>
+    <div id="stage-cards"></div>
     <div class="todo-grid">
       <div class="todo-box">
         <h3><span style="color:#e74c3c">🔴</span> 내 할 일</h3>
@@ -251,6 +256,7 @@ function getStageInfo(stageId){
   const d=s===1?0:s;
   return STAGES.find(st=>st.id===d)||{name:'알 수 없음',color:'#888'};
 }
+function getStageRole(stageId){const s=Number(stageId);return (s===4||s===7)?'boss':'part';}
 function formatDate(d){
   if(!d)return'-';
   const s=String(d).trim();
@@ -319,23 +325,24 @@ function render(){renderDashboard();renderFilterTabs();renderList()}
 function renderDashboard(){
   const active=influencers.filter(i=>i.status==='active');
   const rejected=influencers.filter(i=>i.status==='rejected');
-  let html='';
-  STAGES.forEach(s=>{
+  const cardHtml=s=>{
     const count=s.id===0?active.filter(i=>Number(i.stage)===0||Number(i.stage)===1).length:active.filter(i=>Number(i.stage)===s.id).length;
-    html+=`<div class="card" style="border-top:3px solid ${s.color}" onclick="jumpToFilter(${s.id})"><div class="card-count" style="color:${s.color}">${count}</div><div class="card-label">${s.name}</div></div>`;
-  });
-  html+=`<div class="card" style="border-top:3px solid #e74c3c"><div class="card-count" style="color:#e74c3c">${rejected.length}</div><div class="card-label">거절됨</div></div>`;
-  document.getElementById('stage-cards').innerHTML=html;
+    return`<div class="card" style="border-top:3px solid ${s.color}" onclick="jumpToFilter(${s.id})"><div class="card-count" style="color:${s.color}">${count}</div><div class="card-label">${s.name}</div></div>`;
+  };
+  const partCards=STAGES.filter(s=>getStageRole(s.id)==='part').map(cardHtml).join('');
+  const bossCards=STAGES.filter(s=>getStageRole(s.id)==='boss').map(cardHtml).join('');
+  const rejCard=`<div class="card" style="border-top:3px solid #6c757d" onclick="jumpToFilter('rejected')"><div class="card-count" style="color:#9aa0a6">${rejected.length}</div><div class="card-label">거절됨</div></div>`;
+  document.getElementById('stage-cards').innerHTML=
+    `<div class="role-section"><div class="role-header part">🟡 아르바이트 담당</div><div class="cards">${partCards}</div></div>`+
+    `<div class="role-section"><div class="role-header boss">🔴 사장 담당</div><div class="cards">${bossCards}</div></div>`+
+    `<div class="role-section"><div class="role-header" style="color:var(--muted)">기타</div><div class="cards">${rejCard}</div></div>`;
 
-  const bossItems=active.filter(i=>Number(i.stage)===7);
-  document.getElementById('boss-todo').innerHTML=bossItems.length===0
-    ?'<div class="text-muted" style="padding:6px 0">할 일 없음 ✓</div>'
-    :bossItems.map(i=>{const s=getStageInfo(i.stage);return`<div class="todo-item" onclick="openDetail('${i.id}')"><span class="todo-name">@${i.instagram_id||i.nickname}</span><div class="todo-right"><span class="todo-stage" style="background:${s.color}22;color:${s.color}">${s.name}</span><button class="btn btn-outline btn-sm" onclick="quickAdvance('${i.id}',event)" style="padding:2px 7px">→</button></div></div>`}).join('');
-
-  const partItems=active.filter(i=>{const s=Number(i.stage);return s>=0&&s<=5});
-  document.getElementById('part-todo').innerHTML=partItems.length===0
-    ?'<div class="text-muted" style="padding:6px 0">할 일 없음 ✓</div>'
-    :partItems.map(i=>{const s=getStageInfo(i.stage);const canAdv=getNextStageId(Number(i.stage))!==null;return`<div class="todo-item" onclick="openDetail('${i.id}')"><span class="todo-name">@${i.instagram_id||i.nickname}</span><div class="todo-right"><span class="todo-stage" style="background:${s.color}22;color:${s.color}">${s.name}</span>${canAdv?`<button class="btn btn-outline btn-sm" onclick="quickAdvance('${i.id}',event)" style="padding:2px 7px">→</button>`:''}</div></div>`}).join('');
+  const todoItemHtml=i=>{const s=getStageInfo(i.stage);const canAdv=getNextStageId(Number(i.stage))!==null;return`<div class="todo-item" onclick="openDetail('${i.id}')"><span class="todo-name">@${i.instagram_id||i.nickname}</span><div class="todo-right"><span class="todo-stage" style="background:${s.color}22;color:${s.color}">${s.name}</span>${canAdv?`<button class="btn btn-outline btn-sm" onclick="quickAdvance('${i.id}',event)" style="padding:2px 7px">→</button>`:''}</div></div>`};
+  const emptyTodo='<div class="text-muted" style="padding:6px 0">할 일 없음 ✓</div>';
+  const bossItems=active.filter(i=>{const s=Number(i.stage);return s===4||s===7});
+  document.getElementById('boss-todo').innerHTML=bossItems.length===0?emptyTodo:bossItems.map(todoItemHtml).join('');
+  const partItems=active.filter(i=>{const s=Number(i.stage);return s===0||s===1||s===2||s===5});
+  document.getElementById('part-todo').innerHTML=partItems.length===0?emptyTodo:partItems.map(todoItemHtml).join('');
 }
 
 function renderFilterTabs(){
@@ -343,7 +350,7 @@ function renderFilterTabs(){
   let html=`<div class="filter-tab ${currentFilter==='all'?'active':''}" onclick="setFilter('all')">전체 (${active.length})</div>`;
   STAGES.forEach(s=>{
     const count=s.id===0?active.filter(i=>Number(i.stage)===0||Number(i.stage)===1).length:active.filter(i=>Number(i.stage)===s.id).length;
-    html+=`<div class="filter-tab ${currentFilter===s.id?'active':''}" onclick="setFilter(${s.id})">${s.name} (${count})</div>`;
+    html+=`<div class="filter-tab ${currentFilter===s.id?'active':''}" onclick="setFilter(${s.id})">${getStageRole(s.id)==='boss'?'🔴':'🟡'} ${s.name} (${count})</div>`;
   });
   const rejCount=influencers.filter(i=>i.status==='rejected').length;
   html+=`<div class="filter-tab ${currentFilter==='rejected'?'active':''}" onclick="setFilter('rejected')">거절됨 (${rejCount})</div>`;
