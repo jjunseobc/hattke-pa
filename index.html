@@ -232,6 +232,7 @@ const STAGES=[
 
 let influencers=[],selectedId=null,currentFilter='all';
 let selectedIds=new Set();
+let stage2ProductOnly=false;
 const uploadedFiles={};
 
 function getNextStageId(s){
@@ -544,11 +545,21 @@ function renderPanel(){
       <button class="btn btn-danger btn-sm" onclick="rejectInfluencer()">✕ 거절됨으로</button>
     </div>`;
   }else if(stage===2){
-    actionHtml+=`<p class="text-muted" style="margin-bottom:10px">DM 발송 후 인플루언서의 실명과 연락처를 받아 입력해주세요.<br>(계약·입금에 필요하며, 둘 다 입력해야 다음 단계로 넘어갑니다)</p>
+    stage2ProductOnly=(inf.product_only==='Y');
+    const poA=stage2ProductOnly;
+    actionHtml+=`<p class="text-muted" style="margin-bottom:10px">DM 발송 후 인플루언서의 실명과 연락처를 받아 입력해주세요.<br>(둘 다 입력해야 다음 단계로 넘어갑니다)</p>
     <div class="fg"><label>실명 (계약/입금용)</label><input type="text" id="p-real-name" value="${inf.influencer_name||''}" placeholder="홍길동"></div>
     <div class="fg"><label>연락처</label><input type="tel" id="p-real-phone" value="${inf.phone||''}" placeholder="010-0000-0000"></div>
+    <div style="margin:10px 0">
+      <button type="button" id="p-po-btn" class="btn btn-sm ${poA?'btn-success':'btn-outline'}" onclick="toggleStage2ProductOnly()">📦 제품만 협찬${poA?' ✓':''}</button>
+      <span class="text-muted" style="margin-left:8px">계약서 단계 건너뛰고 바로 제품 발송</span>
+    </div>
+    <div class="fg" id="p-address-wrap" style="${poA?'':'display:none'}">
+      <label>배송 주소 (제품 협찬 시 필수)</label>
+      <textarea id="p-address" placeholder="받는 분 성함 / 주소 / 우편번호">${inf.address||''}</textarea>
+    </div>
     <div class="btn-group">
-      <button class="btn btn-primary" onclick="completeDmStage()">계약서 발송 완료</button>
+      <button class="btn btn-primary" onclick="completeDmStage()">협찬 성사 완료</button>
       <button class="btn btn-danger btn-sm" onclick="rejectInfluencer()">✕ 거절됨으로</button>
     </div>`;
   }else if(stage===4){
@@ -618,12 +629,27 @@ async function completeDmStage(){
   const influencer_name=(document.getElementById('p-real-name').value||'').trim();
   const phone=(document.getElementById('p-real-phone').value||'').trim();
   if(!influencer_name||!phone){alert('실명과 연락처를 모두 입력해야 다음 단계로 넘어갈 수 있습니다.');return}
-  const next=getNextStageId(Number(inf.stage));
+  const productOnly=stage2ProductOnly;
   const dm_sent_date=inf.dm_sent_date||new Date().toISOString().split('T')[0];
+  const changes={influencer_name,phone,dm_sent:'Y',dm_sent_date};
+  if(productOnly){
+    const address=(document.getElementById('p-address').value||'').trim();
+    if(!address){alert('제품만 협찬은 배송 주소를 입력해야 다음 단계로 넘어갈 수 있습니다.');return}
+    changes.stage=5;changes.product_only='Y';changes.address=address;
+  }else{
+    changes.stage=getNextStageId(Number(inf.stage));
+  }
   const backup={...inf};
-  localUpdate(selectedId,{stage:next,influencer_name,phone,dm_sent:'Y',dm_sent_date});render();renderPanel();
-  syncStart();const r=await api('update',{id:selectedId,stage:next,influencer_name,phone,dm_sent:'Y',dm_sent_date});syncEnd();
+  localUpdate(selectedId,changes);render();renderPanel();
+  syncStart();const r=await api('update',Object.assign({id:selectedId},changes));syncEnd();
   if(!r.success){localUpdate(selectedId,backup);render();renderPanel();alert('저장 실패: '+(r.error||''))}
+}
+function toggleStage2ProductOnly(){
+  stage2ProductOnly=!stage2ProductOnly;
+  const wrap=document.getElementById('p-address-wrap');
+  const btn=document.getElementById('p-po-btn');
+  if(wrap)wrap.style.display=stage2ProductOnly?'':'none';
+  if(btn){btn.className='btn btn-sm '+(stage2ProductOnly?'btn-success':'btn-outline');btn.innerHTML='📦 제품만 협찬'+(stage2ProductOnly?' ✓':'');}
 }
 async function advanceStage(){
   const inf=localGet(selectedId);const next=getNextStageId(Number(inf.stage));if(next===null)return;
