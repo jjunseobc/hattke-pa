@@ -126,6 +126,9 @@ input[type=file]{background:var(--surface2);border:1px dashed var(--border);colo
 .ptab.active{background:var(--primary);border-color:var(--primary);color:#fff}
 .ptab:hover:not(.active){border-color:#555}
 .ptab-add{color:var(--primary);border-style:dashed}
+.filter-tab.drop-target{border-color:var(--primary)!important;background:#1a2540;color:var(--primary);box-shadow:0 0 0 2px rgba(79,142,247,.35)}
+body.dragging-row .filter-tab{border-style:dashed}
+tbody tr[draggable="true"]{cursor:grab}
 @media(max-width:600px){
   .todo-grid{grid-template-columns:1fr}
   #detail-panel{width:100%;right:-100%}
@@ -175,6 +178,7 @@ input[type=file]{background:var(--surface2);border:1px dashed var(--border);colo
       <button class="btn btn-outline btn-sm" onclick="clearSelection()">✕ 해제</button>
     </div>
     <div id="filter-tabs" class="filter-tabs"></div>
+    <div class="text-muted" style="margin:0 0 8px 2px">💡 행을 위쪽 단계 탭으로 끌어다 놓으면 단계를 옮길 수 있어요 (PC 기준)</div>
     <div class="table-wrap">
       <table>
         <thead><tr>
@@ -400,16 +404,49 @@ function renderFilterTabs(){
   let html=`<div class="filter-tab ${currentFilter==='all'?'active':''}" onclick="setFilter('all')">전체 (${active.length})</div>`;
   STAGES.forEach(s=>{
     const count=s.id===0?active.filter(i=>Number(i.stage)===0||Number(i.stage)===1).length:active.filter(i=>Number(i.stage)===s.id).length;
-    html+=`<div class="filter-tab ${currentFilter===s.id?'active':''}" onclick="setFilter(${s.id})">${getStageRole(s.id)==='boss'?'🔴':'🟡'} ${s.name} (${count})</div>`;
+    html+=`<div class="filter-tab ${currentFilter===s.id?'active':''}" onclick="setFilter(${s.id})" ondragover="onTabDragOver(event)" ondragleave="onTabDragLeave(event)" ondrop="onTabDrop(event,${s.id})">${getStageRole(s.id)==='boss'?'🔴':'🟡'} ${s.name} (${count})</div>`;
   });
   const rejCount=influencers.filter(i=>i.status==='rejected'&&productMatch(i)).length;
-  html+=`<div class="filter-tab ${currentFilter==='rejected'?'active':''}" onclick="setFilter('rejected')">거절됨 (${rejCount})</div>`;
+  html+=`<div class="filter-tab ${currentFilter==='rejected'?'active':''}" onclick="setFilter('rejected')" ondragover="onTabDragOver(event)" ondragleave="onTabDragLeave(event)" ondrop="onTabDrop(event,'rejected')">거절됨 (${rejCount})</div>`;
   const doneCount=influencers.filter(i=>i.status==='done'&&productMatch(i)).length;
   html+=`<div class="filter-tab ${currentFilter==='done'?'active':''}" onclick="setFilter('done')">완료됨 (${doneCount})</div>`;
   document.getElementById('filter-tabs').innerHTML=html;
 }
 function setFilter(f){currentFilter=f;renderFilterTabs();renderList()}
 function jumpToFilter(id){switchTab('management',document.querySelectorAll('nav button')[1]);setFilter(id)}
+
+let dragInfId=null;
+function onRowDragStart(e,id){dragInfId=id;try{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',id);}catch(_){}document.body.classList.add('dragging-row');}
+function onRowDragEnd(){document.body.classList.remove('dragging-row');dragInfId=null;document.querySelectorAll('.filter-tab.drop-target').forEach(el=>el.classList.remove('drop-target'));}
+function onTabDragOver(e){if(dragInfId!==null){e.preventDefault();e.dataTransfer.dropEffect='move';e.currentTarget.classList.add('drop-target');}}
+function onTabDragLeave(e){e.currentTarget.classList.remove('drop-target');}
+function onTabDrop(e,target){e.preventDefault();e.currentTarget.classList.remove('drop-target');const id=dragInfId||(e.dataTransfer&&e.dataTransfer.getData('text/plain'));dragInfId=null;document.body.classList.remove('dragging-row');if(id!==null&&id!=='')dropToStage(id,target);}
+async function dropToStage(id,target){
+  const inf=localGet(id);if(!inf)return;
+  if(target==='rejected'){
+    if(inf.status==='rejected')return;
+    const backup={...inf};localUpdate(id,{status:'rejected'});render();if(String(selectedId)===String(id))renderPanel();
+    syncStart();const r=await api('update',{id,status:'rejected'});syncEnd();
+    if(!r.success){localUpdate(id,backup);render();alert('저장 실패: '+(r.error||''))}
+    return;
+  }
+  const targetStage=Number(target);
+  const targetIdx=STAGES.findIndex(s=>s.id===targetStage);
+  if(targetIdx<0)return;
+  if(targetIdx>1&&(!(inf.influencer_name||'').trim()||!(inf.phone||'').trim()||!(inf.address||'').trim())){
+    alert('실명·연락처·주소가 모두 입력되어야 이 단계로 옮길 수 있습니다. 먼저 정보를 입력해주세요.');
+    openDetail(id);return;
+  }
+  if(inf.status==='active'&&Number(inf.stage)===targetStage)return;
+  const changes={stage:targetStage};
+  if(inf.status!=='active')changes.status='active';
+  if(targetIdx>=1){changes.dm_sent='Y';changes.dm_sent_date=inf.dm_sent_date||new Date().toISOString().split('T')[0];}
+  if(targetStage===0){changes.dm_sent='N';changes.dm_sent_date='';}
+  const backup={...inf};
+  localUpdate(id,changes);render();if(String(selectedId)===String(id))renderPanel();
+  syncStart();const r=await api('update',Object.assign({id},changes));syncEnd();
+  if(!r.success){localUpdate(id,backup);render();if(String(selectedId)===String(id))renderPanel();alert('저장 실패: '+(r.error||''))}
+}
 
 function getFilteredList(){
   const search=(document.getElementById('search-input').value||'').toLowerCase();
@@ -446,7 +483,7 @@ function renderList(){
     }else{
       dmBtn=`<span class="btn btn-sm" style="min-width:32px;background:var(--success);color:#fff;border:1px solid var(--success);cursor:default">Y</span>`;
     }
-    return`<tr class="${String(selectedId)===String(i.id)?'selected':''} ${i._opt?'optimistic':''}" onclick="openDetail('${i.id}')">
+    return`<tr class="${String(selectedId)===String(i.id)?'selected':''} ${i._opt?'optimistic':''}" draggable="true" ondragstart="onRowDragStart(event,'${i.id}')" ondragend="onRowDragEnd()" onclick="openDetail('${i.id}')">
       <td onclick="event.stopPropagation()"><input type="checkbox" ${selectedIds.has(String(i.id))?'checked':''} onchange="toggleSelect('${i.id}',event)"></td>
       <td><b>@${i.instagram_id||i.nickname||'-'}</b></td><td>${i.name||'-'}</td>
       <td class="muted">${i.followers?formatFollowers(i.followers):'-'}</td>
