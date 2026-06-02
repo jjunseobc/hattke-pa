@@ -168,9 +168,9 @@ input[type=file]{background:var(--surface2);border:1px dashed var(--border);colo
       <table>
         <thead><tr>
           <th style="width:32px"><input type="checkbox" id="select-all" onchange="toggleSelectAll(event)"></th>
-          <th>계정명</th><th>이름</th><th>팔로워</th><th>모집일</th><th>단계</th><th>액션</th>
+          <th>계정명</th><th>이름</th><th>팔로워</th><th>모집일</th><th>단계</th><th>DM발송</th><th>협찬성사</th><th style="text-align:right">DM수당</th><th style="text-align:right">성사수당</th><th style="text-align:right">소계</th><th>액션</th>
         </tr></thead>
-        <tbody id="influencer-table"><tr><td colspan="7"><div class="empty">로딩 중...</div></td></tr></tbody>
+        <tbody id="influencer-table"><tr><td colspan="12"><div class="empty">로딩 중...</div></td></tr></tbody>
       </table>
     </div>
   </div>
@@ -226,10 +226,8 @@ const SCRIPT_URL='https://script.google.com/macros/s/AKfycbyu2pRScWpq3WhsK9aA7Wh
 const STAGES=[
   {id:0, name:'리스팅 목록',           color:'#6c757d'},
   {id:2, name:'DM 발송 완료/ 진행 대기', color:'#0dcaf0'},
-  {id:3, name:'진행완료',              color:'#ffc107'},
   {id:4, name:'계약서발송/수집',         color:'#20c997'},
   {id:5, name:'제품 발송',             color:'#3b82f6'},
-  {id:6, name:'영상완료',              color:'#a855f7'},
   {id:7, name:'광고세팅/입금',          color:'#ec4899'},
 ];
 
@@ -240,10 +238,9 @@ const uploadedFiles={};
 function getNextStageId(s){
   const n=Number(s);
   if(n<=1)return 2;
-  if(n===2)return 3;
-  if(n===3)return 4;
+  if(n===2)return 4;
   if(n===4)return 5;
-  if(n===5)return 6;
+  if(n===5)return 7;
   return null;
 }
 function getStageInfo(stageId){
@@ -327,7 +324,7 @@ function renderDashboard(){
   html+=`<div class="card" style="border-top:3px solid #e74c3c"><div class="card-count" style="color:#e74c3c">${rejected.length}</div><div class="card-label">거절됨</div></div>`;
   document.getElementById('stage-cards').innerHTML=html;
 
-  const bossItems=active.filter(i=>Number(i.stage)===6);
+  const bossItems=active.filter(i=>Number(i.stage)===7);
   document.getElementById('boss-todo').innerHTML=bossItems.length===0
     ?'<div class="text-muted" style="padding:6px 0">할 일 없음 ✓</div>'
     :bossItems.map(i=>{const s=getStageInfo(i.stage);return`<div class="todo-item" onclick="openDetail('${i.id}')"><span class="todo-name">@${i.instagram_id||i.nickname}</span><div class="todo-right"><span class="todo-stage" style="background:${s.color}22;color:${s.color}">${s.name}</span><button class="btn btn-outline btn-sm" onclick="quickAdvance('${i.id}',event)" style="padding:2px 7px">→</button></div></div>`}).join('');
@@ -368,16 +365,27 @@ function getFilteredList(){
 function renderList(){
   const list=getFilteredList();
   const tbody=document.getElementById('influencer-table');
-  if(list.length===0){tbody.innerHTML=`<tr><td colspan="7"><div class="empty">인플루언서가 없습니다.</div></td></tr>`;return}
+  if(list.length===0){tbody.innerHTML=`<tr><td colspan="12"><div class="empty">인플루언서가 없습니다.</div></td></tr>`;return}
   tbody.innerHTML=list.map(i=>{
     const si=i.status==='rejected'?{name:'거절됨',color:'#e74c3c'}:i.status==='done'?{name:'완료됨',color:'#22c55e'}:getStageInfo(i.stage);
     const canAdv=i.status==='active'&&getNextStageId(Number(i.stage))!==null;
+    const dmY=i.dm_sent==='Y';const spY=i.sponsorship_done==='Y';
+    const dmPay=dmY?2000:0;const spPay=spY?20000:0;const subtotal=dmPay+spPay;
     return`<tr class="${String(selectedId)===String(i.id)?'selected':''} ${i._opt?'optimistic':''}" onclick="openDetail('${i.id}')">
       <td onclick="event.stopPropagation()"><input type="checkbox" ${selectedIds.has(String(i.id))?'checked':''} onchange="toggleSelect('${i.id}',event)"></td>
       <td><b>@${i.instagram_id||i.nickname||'-'}</b></td><td>${i.name||'-'}</td>
       <td class="muted">${i.followers?formatFollowers(i.followers):'-'}</td>
       <td class="muted">${formatDate(i.recruited_date)}</td>
       <td><span class="stage-badge" style="background:${si.color}22;color:${si.color}">${si.name}</span></td>
+      <td onclick="event.stopPropagation()" style="text-align:center">
+        <button class="btn btn-sm" style="min-width:32px;background:${dmY?'var(--success)':'var(--surface3)'};color:${dmY?'#fff':'var(--muted)'};border:1px solid ${dmY?'var(--success)':'var(--border)'}" onclick="toggleDm('${i.id}',event)">${dmY?'Y':'N'}</button>
+      </td>
+      <td onclick="event.stopPropagation()" style="text-align:center">
+        <button class="btn btn-sm" style="min-width:32px;background:${spY?'var(--success)':'var(--surface3)'};color:${spY?'#fff':'var(--muted)'};border:1px solid ${spY?'var(--success)':'var(--border)'}" onclick="toggleSponsorship('${i.id}',event)">${spY?'Y':'N'}</button>
+      </td>
+      <td style="text-align:right;color:${dmY?'#ffc107':'var(--muted)'};font-size:12px">${dmY?'2,000원':'-'}</td>
+      <td style="text-align:right;color:${spY?'#4f8ef7':'var(--muted)'};font-size:12px">${spY?'20,000원':'-'}</td>
+      <td style="text-align:right;font-weight:${subtotal>0?'600':'400'};color:${subtotal>0?'#22c55e':'var(--muted)'};font-size:12px">${subtotal>0?subtotal.toLocaleString()+'원':'-'}</td>
       <td onclick="event.stopPropagation()" style="white-space:nowrap">
         ${i.reels_url?`<a class="link-btn" href="${i.reels_url}" target="_blank">릴스↗</a> `:''}
         ${canAdv?`<button class="btn btn-outline btn-sm" onclick="quickAdvance('${i.id}',event)" style="padding:3px 8px">→</button>`:''}
@@ -386,6 +394,23 @@ function renderList(){
   }).join('');
   const sa=document.getElementById('select-all');
   if(sa){const ac=list.length>0&&list.every(i=>selectedIds.has(String(i.id)));sa.checked=ac;sa.indeterminate=!ac&&list.some(i=>selectedIds.has(String(i.id)))}
+}
+
+async function toggleDm(id,e){
+  e.stopPropagation();
+  const inf=localGet(id);if(!inf)return;
+  const prev=inf.dm_sent;const next=prev==='Y'?'N':'Y';
+  localUpdate(id,{dm_sent:next});renderList();
+  syncStart();const r=await api('update',{id,dm_sent:next});syncEnd();
+  if(!r.success){localUpdate(id,{dm_sent:prev});renderList()}
+}
+async function toggleSponsorship(id,e){
+  e.stopPropagation();
+  const inf=localGet(id);if(!inf)return;
+  const prev=inf.sponsorship_done;const next=prev==='Y'?'N':'Y';
+  localUpdate(id,{sponsorship_done:next});renderList();
+  syncStart();const r=await api('update',{id,sponsorship_done:next});syncEnd();
+  if(!r.success){localUpdate(id,{sponsorship_done:prev});renderList()}
 }
 function toggleSelectAll(e){const list=getFilteredList();if(e.target.checked)list.forEach(i=>selectedIds.add(String(i.id)));else list.forEach(i=>selectedIds.delete(String(i.id)));updateBulkBar();renderList()}
 function toggleSelect(id,e){e.stopPropagation();if(selectedIds.has(String(id)))selectedIds.delete(String(id));else selectedIds.add(String(id));updateBulkBar();renderList()}
@@ -475,7 +500,7 @@ function renderPanel(){
     actionHtml+=`<p style="color:#22c55e;font-weight:600;margin-bottom:6px">✓ 모든 단계 완료</p>
     <p class="text-muted">광고코드: ${inf.ad_code||'-'}</p>
     ${inf.contract_file?`<div style="margin-top:6px"><a href="${inf.contract_file}" target="_blank" class="link-btn">📎 계약서 보기</a></div>`:''}
-    ${inf.special_note?`<p class="text-muted" style="margin-top:6px">특이사항: ${inf.special_note}</p>`:''}`;
+    ${inf.special_note?`<p class="text-muted" style="margin-top:6px">특이사항: ${inf.special_note}</p>`:''}` ;
   }else if(stage===0||stage===1){
     actionHtml+=`<p class="text-muted" style="margin-bottom:10px">DM 발송 준비가 완료되면 다음 단계로 이동하세요.</p>
     <div class="btn-group">
@@ -486,14 +511,6 @@ function renderPanel(){
     const v=formatDate(inf.dm_sent_date);
     actionHtml+=`<div class="fg"><label>DM 발송일</label><input type="date" id="p-dm-date" value="${v!=='-'?v:today}"></div>
     <button class="btn btn-primary" onclick="advanceWithDate('dm_sent_date','p-dm-date')">DM 발송 완료 →</button>`;
-  }else if(stage===3){
-    actionHtml+=`<p class="text-muted" style="margin-bottom:10px">진행 의사 확인 후 아래 정보를 수집해주세요.</p>
-    <div class="fg"><label>인플루언서 실명</label><input type="text" id="p-inf-name2" value="${inf.influencer_name||''}" placeholder="홍길동"></div>
-    <div class="fg"><label>연락처</label><input type="tel" id="p-phone2" value="${inf.phone||''}" placeholder="010-0000-0000"></div>
-    <div class="btn-group" style="margin-top:8px">
-      <button class="btn btn-success" onclick="confirmIntention()">✓ 진행 의사 있음</button>
-      <button class="btn btn-danger btn-sm" onclick="rejectInfluencer()">✕ 거절됨으로</button>
-    </div>`;
   }else if(stage===4){
     const v=formatDate(inf.contract_sent_date);
     actionHtml+=`<div class="fg"><label>계약 완료일</label><input type="date" id="p-contract-date" value="${v!=='-'?v:today}"></div>
@@ -522,7 +539,7 @@ function renderPanel(){
       </div>
     </div>
     <button class="btn btn-primary" onclick="completeProduct()">제품 발송 완료 →</button>`;
-  }else if(stage===6){
+  }else if(stage===7){
     const vp=formatDate(inf.payment_date);
     actionHtml+=`<p class="text-muted" style="margin-bottom:10px">광고 세팅 및 인플루언서 입금을 진행해주세요.</p>
     <div class="fg"><label>광고코드 (복사용)</label>
