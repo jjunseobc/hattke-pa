@@ -242,6 +242,9 @@ function getNextStageId(s){
   if(n===5)return 7;
   return null;
 }
+function needsContactInfo(inf){
+  return !!inf&&inf.status==='active'&&Number(inf.stage)===2&&(!(inf.influencer_name||'').trim()||!(inf.phone||'').trim());
+}
 function getStageInfo(stageId){
   const s=Number(stageId);
   const d=s===1?0:s;
@@ -417,11 +420,12 @@ async function toggleDm(id,e){
 async function dmAndAdvance(id,e){
   e.stopPropagation();
   const inf=localGet(id);if(!inf||inf.status!=='active')return;
-  const prevStage=Number(inf.stage);const prevDm=inf.dm_sent;
+  const prevStage=Number(inf.stage);const prevDm=inf.dm_sent;const prevDate=inf.dm_sent_date;
   const nextStage=getNextStageId(prevStage);if(nextStage===null)return;
-  localUpdate(id,{dm_sent:'Y',stage:nextStage});render();
-  syncStart();const r=await api('update',{id,dm_sent:'Y',stage:nextStage});syncEnd();
-  if(!r.success){localUpdate(id,{dm_sent:prevDm,stage:prevStage});render();alert('저장 실패: '+r.error)}
+  const dm_sent_date=inf.dm_sent_date||new Date().toISOString().split('T')[0];
+  localUpdate(id,{dm_sent:'Y',stage:nextStage,dm_sent_date});render();
+  syncStart();const r=await api('update',{id,dm_sent:'Y',stage:nextStage,dm_sent_date});syncEnd();
+  if(!r.success){localUpdate(id,{dm_sent:prevDm,stage:prevStage,dm_sent_date:prevDate});render();alert('저장 실패: '+r.error)}
 }
 async function dmRevert(id,e){
   e.stopPropagation();
@@ -446,9 +450,11 @@ function clearSelection(){selectedIds.clear();updateBulkBar();renderList()}
 
 async function bulkAdvance(){
   const ids=[...selectedIds];
-  ids.forEach(id=>{const inf=localGet(id);if(!inf||inf.status!=='active')return;const next=getNextStageId(Number(inf.stage));if(next!==null)localUpdate(id,{stage:next})});
+  let blocked=0;const advanced=[];
+  ids.forEach(id=>{const inf=localGet(id);if(!inf||inf.status!=='active')return;if(needsContactInfo(inf)){blocked++;return}const next=getNextStageId(Number(inf.stage));if(next!==null){localUpdate(id,{stage:next});advanced.push(id)}});
   selectedIds.clear();updateBulkBar();render();
-  syncStart();await Promise.all(ids.map(id=>{const inf=localGet(id);return inf?api('update',{id,stage:inf.stage}):Promise.resolve({success:true})}));syncEnd();
+  syncStart();await Promise.all(advanced.map(id=>{const inf=localGet(id);return inf?api('update',{id,stage:inf.stage}):Promise.resolve({success:true})}));syncEnd();
+  if(blocked>0)alert(blocked+'명은 실명·연락처가 없어 DM 발송 단계에 그대로 두었습니다. 개별로 입력 후 진행해주세요.');
 }
 async function bulkReject(){
   if(!confirm(selectedIds.size+'개를 거절 처리할까요?'))return;
@@ -460,6 +466,7 @@ async function bulkReject(){
 async function quickAdvance(id,e){
   if(e)e.stopPropagation();
   const inf=localGet(id);if(!inf||inf.status!=='active')return;
+  if(needsContactInfo(inf)){alert('실명과 연락처를 입력해야 계약서 발송(다음 단계)으로 넘어갈 수 있습니다.');openDetail(id);return}
   const next=getNextStageId(Number(inf.stage));if(next===null)return;
   const prev=Number(inf.stage);localUpdate(id,{stage:next});render();if(String(selectedId)===String(id))renderPanel();
   syncStart();const r=await api('update',{id,stage:next});syncEnd();
@@ -508,10 +515,12 @@ function renderPanel(){
   tlHtml+='</div>';
 
   const rv=formatDate(inf.recruited_date);
-  const infoHtml=`<div class="section-title">기본 정보</div>
-    <div class="fg"><label>이름 (별칭)</label><input type="text" id="p-name" value="${inf.name||''}"></div>
+  const simpleInfo=inf.status==='active'&&(stage===0||stage===1||stage===2);
+  const contactRows=simpleInfo?'':`
     <div class="fg"><label>실명 (계약/입금용)</label><input type="text" id="p-inf-name" value="${inf.influencer_name||''}"></div>
-    <div class="fg"><label>연락처</label><input type="tel" id="p-phone" value="${inf.phone||''}" placeholder="010-0000-0000"></div>
+    <div class="fg"><label>연락처</label><input type="tel" id="p-phone" value="${inf.phone||''}" placeholder="010-0000-0000"></div>`;
+  const infoHtml=`<div class="section-title">기본 정보</div>
+    <div class="fg"><label>이름 (별칭)</label><input type="text" id="p-name" value="${inf.name||''}"></div>${contactRows}
     <div class="fg"><label>팔로워 수</label><input type="text" id="p-followers" value="${inf.followers||''}"></div>
     <div class="fg"><label>모집일</label><input type="date" id="p-recruited" value="${rv!=='-'?rv:''}"></div>
     <div class="fg"><label>메모</label><textarea id="p-memo">${inf.memo||''}</textarea></div>
@@ -535,10 +544,11 @@ function renderPanel(){
       <button class="btn btn-danger btn-sm" onclick="rejectInfluencer()">✕ 거절됨으로</button>
     </div>`;
   }else if(stage===2){
-    const v=formatDate(inf.dm_sent_date);
-    actionHtml+=`<div class="fg"><label>DM 발송일</label><input type="date" id="p-dm-date" value="${v!=='-'?v:today}"></div>
+    actionHtml+=`<p class="text-muted" style="margin-bottom:10px">DM 발송 후 인플루언서의 실명과 연락처를 받아 입력해주세요.<br>(계약·입금에 필요하며, 둘 다 입력해야 다음 단계로 넘어갑니다)</p>
+    <div class="fg"><label>실명 (계약/입금용)</label><input type="text" id="p-real-name" value="${inf.influencer_name||''}" placeholder="홍길동"></div>
+    <div class="fg"><label>연락처</label><input type="tel" id="p-real-phone" value="${inf.phone||''}" placeholder="010-0000-0000"></div>
     <div class="btn-group">
-      <button class="btn btn-primary" onclick="advanceWithDate('dm_sent_date','p-dm-date')">DM 발송 완료 →</button>
+      <button class="btn btn-primary" onclick="completeDmStage()">계약서 발송 완료</button>
       <button class="btn btn-danger btn-sm" onclick="rejectInfluencer()">✕ 거절됨으로</button>
     </div>`;
   }else if(stage===4){
@@ -593,17 +603,35 @@ function copyText(text){
 }
 
 async function saveBasicInfo(){
-  const name=document.getElementById('p-name').value,influencer_name=document.getElementById('p-inf-name').value,phone=document.getElementById('p-phone').value;
+  const cur=localGet(selectedId);
+  const elInf=document.getElementById('p-inf-name'),elPhone=document.getElementById('p-phone');
+  const name=document.getElementById('p-name').value;
+  const influencer_name=elInf?elInf.value:(cur.influencer_name||'');
+  const phone=elPhone?elPhone.value:(cur.phone||'');
   const followers=document.getElementById('p-followers').value,recruited_date=document.getElementById('p-recruited').value,memo=document.getElementById('p-memo').value;
-  const backup={...localGet(selectedId)};localUpdate(selectedId,{name,influencer_name,phone,followers,recruited_date,memo});renderPanel();renderDashboard();
+  const backup={...cur};localUpdate(selectedId,{name,influencer_name,phone,followers,recruited_date,memo});renderPanel();renderDashboard();
   syncStart();const r=await api('update',{id:selectedId,name,influencer_name,phone,followers,recruited_date,memo});syncEnd();
   if(!r.success){localUpdate(selectedId,backup);renderPanel();alert('저장 실패: '+r.error)}
 }
+async function completeDmStage(){
+  const inf=localGet(selectedId);if(!inf)return;
+  const influencer_name=(document.getElementById('p-real-name').value||'').trim();
+  const phone=(document.getElementById('p-real-phone').value||'').trim();
+  if(!influencer_name||!phone){alert('실명과 연락처를 모두 입력해야 다음 단계로 넘어갈 수 있습니다.');return}
+  const next=getNextStageId(Number(inf.stage));
+  const dm_sent_date=inf.dm_sent_date||new Date().toISOString().split('T')[0];
+  const backup={...inf};
+  localUpdate(selectedId,{stage:next,influencer_name,phone,dm_sent:'Y',dm_sent_date});render();renderPanel();
+  syncStart();const r=await api('update',{id:selectedId,stage:next,influencer_name,phone,dm_sent:'Y',dm_sent_date});syncEnd();
+  if(!r.success){localUpdate(selectedId,backup);render();renderPanel();alert('저장 실패: '+(r.error||''))}
+}
 async function advanceStage(){
   const inf=localGet(selectedId);const next=getNextStageId(Number(inf.stage));if(next===null)return;
-  const prev=Number(inf.stage);localUpdate(selectedId,{stage:next});render();renderPanel();
-  syncStart();const r=await api('update',{id:selectedId,stage:next});syncEnd();
-  if(!r.success){localUpdate(selectedId,{stage:prev});render();renderPanel();alert('저장 실패')}
+  const prev=Number(inf.stage);const backup={...inf};
+  const extra=next===2?{dm_sent:'Y',dm_sent_date:inf.dm_sent_date||new Date().toISOString().split('T')[0]}:{};
+  localUpdate(selectedId,{stage:next,...extra});render();renderPanel();
+  syncStart();const r=await api('update',{id:selectedId,stage:next,...extra});syncEnd();
+  if(!r.success){localUpdate(selectedId,backup);render();renderPanel();alert('저장 실패')}
 }
 async function advanceWithDate(field,inputId){
   const inf=localGet(selectedId);const next=getNextStageId(Number(inf.stage));
