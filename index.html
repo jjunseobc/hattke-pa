@@ -231,7 +231,7 @@ const STAGES=[
   {id:0, name:'리스팅 목록',           color:'#6c757d'},
   {id:2, name:'DM 발송 완료/ 진행 대기', color:'#0dcaf0'},
   {id:4, name:'계약서발송/수집',         color:'#20c997'},
-  {id:5, name:'제품 발송',             color:'#3b82f6'},
+  {id:5, name:'광고 코드/입금정보 수집', color:'#3b82f6'},
   {id:7, name:'광고세팅/입금',          color:'#ec4899'},
 ];
 
@@ -599,7 +599,7 @@ function renderPanel(){
         <span id="id-status" class="file-status">${inf.id_file?`<a href="${inf.id_file}" target="_blank" style="color:var(--success)">✓ 기존 파일 보기</a>`:''}</span>
       </div>
     </div>
-    <button class="btn btn-primary" onclick="completeProduct()">제품 발송 완료 →</button>`;
+    <button class="btn btn-primary" onclick="completeProduct()">협찬 완료</button>`;
   }else if(stage===7){
     const vp=formatDate(inf.payment_date);
     actionHtml+=`<p class="text-muted" style="margin-bottom:10px">광고 세팅 및 인플루언서 입금을 진행해주세요.</p>
