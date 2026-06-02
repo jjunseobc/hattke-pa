@@ -168,7 +168,7 @@ input[type=file]{background:var(--surface2);border:1px dashed var(--border);colo
       <table>
         <thead><tr>
           <th style="width:32px"><input type="checkbox" id="select-all" onchange="toggleSelectAll(event)"></th>
-          <th>계정명</th><th>이름</th><th>팔로워</th><th>모집일</th><th>단계</th><th>DM발송</th><th>협찬성사</th><th style="text-align:right">DM수당</th><th style="text-align:right">성사수당</th><th style="text-align:right">소계</th><th>액션</th>
+          <th>계정명</th><th>이름</th><th>팔로워</th><th>모집일</th><th>단계</th><th>DM발송</th><th>협찬성사</th><th style="text-align:right">DM수당</th><th style="text-align:right">성사수당</th><th style="text-align:right">소계</th><th>릴스 링크</th>
         </tr></thead>
         <tbody id="influencer-table"><tr><td colspan="12"><div class="empty">로딩 중...</div></td></tr></tbody>
       </table>
@@ -222,7 +222,6 @@ input[type=file]{background:var(--surface2);border:1px dashed var(--border);colo
 <script>
 const SCRIPT_URL='https://script.google.com/macros/s/AKfycbyu2pRScWpq3WhsK9aA7WhEXWYlGvA_0YiG4xuX8YmBP34A8BX9dUph2QgcfbuLGdo/exec';
 
-// ★ 탭/단계 이름 변경
 const STAGES=[
   {id:0, name:'리스팅 목록',           color:'#6c757d'},
   {id:2, name:'DM 발송 완료/ 진행 대기', color:'#0dcaf0'},
@@ -368,18 +367,27 @@ function renderList(){
   if(list.length===0){tbody.innerHTML=`<tr><td colspan="12"><div class="empty">인플루언서가 없습니다.</div></td></tr>`;return}
   tbody.innerHTML=list.map(i=>{
     const si=i.status==='rejected'?{name:'거절됨',color:'#e74c3c'}:i.status==='done'?{name:'완료됨',color:'#22c55e'}:getStageInfo(i.stage);
-    const canAdv=i.status==='active'&&getNextStageId(Number(i.stage))!==null;
-    const dmY=i.dm_sent==='Y';const spY=i.sponsorship_done==='Y';
+    const isListing=i.status==='active'&&(Number(i.stage)===0||Number(i.stage)===1);
+    const isRejected=i.status==='rejected';
+    const dmForced=!isListing&&!isRejected;
+    const dmY=dmForced?true:i.dm_sent==='Y';
+    const spY=i.sponsorship_done==='Y';
     const dmPay=dmY?2000:0;const spPay=spY?20000:0;const subtotal=dmPay+spPay;
+    let dmBtn;
+    if(isListing){
+      dmBtn=`<button class="btn btn-sm" style="min-width:32px;background:${i.dm_sent==='Y'?'var(--success)':'var(--surface3)'};color:${i.dm_sent==='Y'?'#fff':'var(--muted)'};border:1px solid ${i.dm_sent==='Y'?'var(--success)':'var(--border)'}" onclick="dmAndAdvance('${i.id}',event)">${i.dm_sent==='Y'?'Y':'N'}</button>`;
+    }else if(isRejected){
+      dmBtn=`<button class="btn btn-sm" style="min-width:32px;background:${i.dm_sent==='Y'?'var(--success)':'var(--surface3)'};color:${i.dm_sent==='Y'?'#fff':'var(--muted)'};border:1px solid ${i.dm_sent==='Y'?'var(--success)':'var(--border)'}" onclick="toggleDm('${i.id}',event)">${i.dm_sent==='Y'?'Y':'N'}</button>`;
+    }else{
+      dmBtn=`<span class="btn btn-sm" style="min-width:32px;background:var(--success);color:#fff;border:1px solid var(--success);cursor:default">Y</span>`;
+    }
     return`<tr class="${String(selectedId)===String(i.id)?'selected':''} ${i._opt?'optimistic':''}" onclick="openDetail('${i.id}')">
       <td onclick="event.stopPropagation()"><input type="checkbox" ${selectedIds.has(String(i.id))?'checked':''} onchange="toggleSelect('${i.id}',event)"></td>
       <td><b>@${i.instagram_id||i.nickname||'-'}</b></td><td>${i.name||'-'}</td>
       <td class="muted">${i.followers?formatFollowers(i.followers):'-'}</td>
       <td class="muted">${formatDate(i.recruited_date)}</td>
       <td><span class="stage-badge" style="background:${si.color}22;color:${si.color}">${si.name}</span></td>
-      <td onclick="event.stopPropagation()" style="text-align:center">
-        <button class="btn btn-sm" style="min-width:32px;background:${dmY?'var(--success)':'var(--surface3)'};color:${dmY?'#fff':'var(--muted)'};border:1px solid ${dmY?'var(--success)':'var(--border)'}" onclick="toggleDm('${i.id}',event)">${dmY?'Y':'N'}</button>
-      </td>
+      <td onclick="event.stopPropagation()" style="text-align:center">${dmBtn}</td>
       <td onclick="event.stopPropagation()" style="text-align:center">
         <button class="btn btn-sm" style="min-width:32px;background:${spY?'var(--success)':'var(--surface3)'};color:${spY?'#fff':'var(--muted)'};border:1px solid ${spY?'var(--success)':'var(--border)'}" onclick="toggleSponsorship('${i.id}',event)">${spY?'Y':'N'}</button>
       </td>
@@ -387,8 +395,7 @@ function renderList(){
       <td style="text-align:right;color:${spY?'#4f8ef7':'var(--muted)'};font-size:12px">${spY?'20,000원':'-'}</td>
       <td style="text-align:right;font-weight:${subtotal>0?'600':'400'};color:${subtotal>0?'#22c55e':'var(--muted)'};font-size:12px">${subtotal>0?subtotal.toLocaleString()+'원':'-'}</td>
       <td onclick="event.stopPropagation()" style="white-space:nowrap">
-        ${i.reels_url?`<a class="link-btn" href="${i.reels_url}" target="_blank">릴스↗</a> `:''}
-        ${canAdv?`<button class="btn btn-outline btn-sm" onclick="quickAdvance('${i.id}',event)" style="padding:3px 8px">→</button>`:''}
+        ${i.reels_url?`<a class="link-btn" href="${i.reels_url}" target="_blank">릴스↗</a>`:'—'}
       </td>
     </tr>`;
   }).join('');
@@ -403,6 +410,15 @@ async function toggleDm(id,e){
   localUpdate(id,{dm_sent:next});renderList();
   syncStart();const r=await api('update',{id,dm_sent:next});syncEnd();
   if(!r.success){localUpdate(id,{dm_sent:prev});renderList()}
+}
+async function dmAndAdvance(id,e){
+  e.stopPropagation();
+  const inf=localGet(id);if(!inf||inf.status!=='active')return;
+  const prevStage=Number(inf.stage);const prevDm=inf.dm_sent;
+  const nextStage=getNextStageId(prevStage);if(nextStage===null)return;
+  localUpdate(id,{dm_sent:'Y',stage:nextStage});render();
+  syncStart();const r=await api('update',{id,dm_sent:'Y',stage:nextStage});syncEnd();
+  if(!r.success){localUpdate(id,{dm_sent:prevDm,stage:prevStage});render();alert('저장 실패: '+r.error)}
 }
 async function toggleSponsorship(id,e){
   e.stopPropagation();
@@ -510,7 +526,10 @@ function renderPanel(){
   }else if(stage===2){
     const v=formatDate(inf.dm_sent_date);
     actionHtml+=`<div class="fg"><label>DM 발송일</label><input type="date" id="p-dm-date" value="${v!=='-'?v:today}"></div>
-    <button class="btn btn-primary" onclick="advanceWithDate('dm_sent_date','p-dm-date')">DM 발송 완료 →</button>`;
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="advanceWithDate('dm_sent_date','p-dm-date')">DM 발송 완료 →</button>
+      <button class="btn btn-danger btn-sm" onclick="rejectInfluencer()">✕ 거절됨으로</button>
+    </div>`;
   }else if(stage===4){
     const v=formatDate(inf.contract_sent_date);
     actionHtml+=`<div class="fg"><label>계약 완료일</label><input type="date" id="p-contract-date" value="${v!=='-'?v:today}"></div>
@@ -519,7 +538,10 @@ function renderPanel(){
       <span id="contract-status" class="file-status">${inf.contract_file?`<a href="${inf.contract_file}" target="_blank" style="color:var(--success)">✓ 기존 파일 보기</a>`:''}</span>
     </div>
     <div class="fg"><label>특이사항 (진행 단가 등)</label><textarea id="p-special-note">${inf.special_note||''}</textarea></div>
-    <button class="btn btn-primary" onclick="completeContract()">계약 완료 →</button>`;
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="completeContract()">계약 완료 →</button>
+      <button class="btn btn-danger btn-sm" onclick="rejectInfluencer()">✕ 거절됨으로</button>
+    </div>`;
   }else if(stage===5){
     const v=formatDate(inf.product_sent_date);const isProductOnly=inf.product_only==='Y';
     actionHtml+=`<div class="fg"><label>제품 발송일</label><input type="date" id="p-product-date" value="${v!=='-'?v:today}"></div>
