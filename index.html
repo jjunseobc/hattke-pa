@@ -231,6 +231,7 @@ const STAGES=[
   {id:0, name:'리스팅 목록',           color:'#6c757d'},
   {id:2, name:'DM 발송 완료/ 진행 대기', color:'#0dcaf0'},
   {id:4, name:'계약서발송/수집',         color:'#20c997'},
+  {id:6, name:'제품 발송',              color:'#8b5cf6'},
   {id:5, name:'광고 코드/입금정보 수집', color:'#3b82f6'},
   {id:7, name:'광고세팅/입금',          color:'#ec4899'},
 ];
@@ -244,13 +245,15 @@ function getNextStageId(s){
   const n=Number(s);
   if(n<=1)return 2;
   if(n===2)return 4;
-  if(n===4)return 5;
+  if(n===4)return 6;
+  if(n===6)return 5;
   if(n===5)return 7;
   return null;
 }
 function needsContactInfo(inf){
-  return !!inf&&inf.status==='active'&&Number(inf.stage)===2&&(!(inf.influencer_name||'').trim()||!(inf.phone||'').trim());
+  return !!inf&&inf.status==='active'&&Number(inf.stage)===2&&(!(inf.influencer_name||'').trim()||!(inf.phone||'').trim()||!(inf.address||'').trim());
 }
+function escHtml(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function getStageInfo(stageId){
   const s=Number(stageId);
   const d=s===1?0:s;
@@ -341,7 +344,7 @@ function renderDashboard(){
   const emptyTodo='<div class="text-muted" style="padding:6px 0">할 일 없음 ✓</div>';
   const bossItems=active.filter(i=>{const s=Number(i.stage);return s===4||s===7});
   document.getElementById('boss-todo').innerHTML=bossItems.length===0?emptyTodo:bossItems.map(todoItemHtml).join('');
-  const partItems=active.filter(i=>{const s=Number(i.stage);return s===0||s===1||s===2||s===5});
+  const partItems=active.filter(i=>{const s=Number(i.stage);return s===0||s===1||s===2||s===5||s===6});
   document.getElementById('part-todo').innerHTML=partItems.length===0?emptyTodo:partItems.map(todoItemHtml).join('');
 }
 
@@ -507,16 +510,17 @@ function renderPanel(){
   const stage=Number(inf.stage);
   document.getElementById('panel-title').textContent='@'+(inf.instagram_id||inf.nickname);
   const today=new Date().toISOString().split('T')[0];
-  const df={2:'dm_sent_date',4:'contract_sent_date',5:'product_sent_date',7:'ad_setup_date'};
+  const df={2:'dm_sent_date',4:'contract_sent_date',6:'product_sent_date',7:'ad_setup_date'};
 
   let tlHtml='<div class="section-title">진행 단계</div><div class="timeline">';
+  const curIdx=STAGES.findIndex(st=>st.id===(stage===1?0:stage));
   STAGES.forEach((s,idx)=>{
-    let dc=s.id<stage?'done':s.id===stage?'current':'pending';
-    if(inf.status==='rejected')dc=s.id<stage?'done':'pending';
+    let dc=idx<curIdx?'done':idx===curIdx?'current':'pending';
+    if(inf.status==='rejected')dc=idx<curIdx?'done':'pending';
     if(inf.status==='done')dc='done';
-    const lc=s.id<stage?'done':s.id===stage?'current':'';
+    const lc=idx<curIdx?'done':idx===curIdx?'current':'';
     const dv=formatDate(df[s.id]?inf[df[s.id]]:(s.id===0?inf.recruited_date:''));
-    tlHtml+=`<div class="tl-item"><div class="tl-dot ${dc}">${(s.id<stage||inf.status==='done')?'✓':idx+1}</div><div class="tl-label ${lc}">${s.name}${dv!=='-'?`<span class="tl-date">${dv}</span>`:''}</div></div>`;
+    tlHtml+=`<div class="tl-item"><div class="tl-dot ${dc}">${(idx<curIdx||inf.status==='done')?'✓':idx+1}</div><div class="tl-label ${lc}">${s.name}${dv!=='-'?`<span class="tl-date">${dv}</span>`:''}</div></div>`;
     if(idx<STAGES.length-1)tlHtml+='<div class="tl-line"></div>';
   });
   if(inf.status==='rejected')tlHtml+='<div class="tl-item"><div class="tl-dot" style="background:#e74c3c;color:#fff">✕</div><div class="tl-label" style="color:#e74c3c">거절됨</div></div>';
@@ -554,16 +558,13 @@ function renderPanel(){
   }else if(stage===2){
     stage2ProductOnly=(inf.product_only==='Y');
     const poA=stage2ProductOnly;
-    actionHtml+=`<p class="text-muted" style="margin-bottom:10px">DM 발송 후 인플루언서의 실명과 연락처를 받아 입력해주세요.<br>(둘 다 입력해야 다음 단계로 넘어갑니다)</p>
-    <div class="fg"><label>실명 (계약/입금용)</label><input type="text" id="p-real-name" value="${inf.influencer_name||''}" placeholder="홍길동"></div>
-    <div class="fg"><label>연락처</label><input type="tel" id="p-real-phone" value="${inf.phone||''}" placeholder="010-0000-0000"></div>
+    actionHtml+=`<p class="text-muted" style="margin-bottom:10px">DM 발송 후 인플루언서의 실명·연락처·주소를 받아 입력해주세요.<br>(모두 입력해야 다음 단계로 넘어갑니다)</p>
+    <div class="fg"><label>실명 (계약/입금용)</label><input type="text" id="p-real-name" value="${escHtml(inf.influencer_name)}" placeholder="홍길동"></div>
+    <div class="fg"><label>연락처</label><input type="tel" id="p-real-phone" value="${escHtml(inf.phone)}" placeholder="010-0000-0000"></div>
+    <div class="fg"><label>배송 주소</label><textarea id="p-address" placeholder="우편번호 / 주소 입력">${escHtml(inf.address)}</textarea></div>
     <div style="margin:10px 0">
       <button type="button" id="p-po-btn" class="btn btn-sm ${poA?'btn-success':'btn-outline'}" onclick="toggleStage2ProductOnly()">📦 제품만 협찬${poA?' ✓':''}</button>
       <span class="text-muted" style="margin-left:8px">계약서 단계 건너뛰고 바로 제품 발송</span>
-    </div>
-    <div class="fg" id="p-address-wrap" style="${poA?'':'display:none'}">
-      <label>배송 주소 (제품 협찬 시 필수)</label>
-      <textarea id="p-address" placeholder="우편번호 / 주소 입력">${inf.address||''}</textarea>
     </div>
     <div class="btn-group">
       <button class="btn btn-primary" onclick="completeDmStage()">협찬 성사 완료</button>
@@ -581,6 +582,13 @@ function renderPanel(){
       <button class="btn btn-primary" onclick="completeContract()">계약 완료 →</button>
       <button class="btn btn-danger btn-sm" onclick="rejectInfluencer()">✕ 거절됨으로</button>
     </div>`;
+  }else if(stage===6){
+    actionHtml+=`<p class="text-muted" style="margin-bottom:10px">아래 정보를 복사해 제품을 발송한 뒤 '제품 발송 완료'를 눌러주세요.</p>
+    <div class="fg"><label>실명 (받는 분)</label><div class="copy-row"><input type="text" value="${escHtml(inf.influencer_name)}" readonly><button class="btn btn-outline btn-sm" onclick="copyField('influencer_name',event)">복사</button></div></div>
+    <div class="fg"><label>연락처</label><div class="copy-row"><input type="text" value="${escHtml(inf.phone)}" readonly><button class="btn btn-outline btn-sm" onclick="copyField('phone',event)">복사</button></div></div>
+    <div class="fg"><label>배송 주소</label><div class="copy-row"><textarea readonly style="min-height:48px;flex:1">${escHtml(inf.address)}</textarea><button class="btn btn-outline btn-sm" onclick="copyField('address',event)">복사</button></div></div>
+    <button class="btn btn-outline btn-sm btn-block" style="margin-bottom:10px" onclick="copyField('all',event)">📋 실명·연락처·주소 한 번에 복사</button>
+    <button class="btn btn-primary" onclick="completeProductShip()">제품 발송 완료 →</button>`;
   }else if(stage===5){
     const v=formatDate(inf.product_sent_date);const isProductOnly=inf.product_only==='Y';
     actionHtml+=`<div class="fg"><label>제품 발송일</label><input type="date" id="p-product-date" value="${v!=='-'?v:today}"></div>
@@ -635,14 +643,13 @@ async function completeDmStage(){
   const inf=localGet(selectedId);if(!inf)return;
   const influencer_name=(document.getElementById('p-real-name').value||'').trim();
   const phone=(document.getElementById('p-real-phone').value||'').trim();
-  if(!influencer_name||!phone){alert('실명과 연락처를 모두 입력해야 다음 단계로 넘어갈 수 있습니다.');return}
+  const address=(document.getElementById('p-address').value||'').trim();
+  if(!influencer_name||!phone||!address){alert('실명·연락처·주소를 모두 입력해야 다음 단계로 넘어갈 수 있습니다.');return}
   const productOnly=stage2ProductOnly;
   const dm_sent_date=inf.dm_sent_date||new Date().toISOString().split('T')[0];
-  const changes={influencer_name,phone,dm_sent:'Y',dm_sent_date};
+  const changes={influencer_name,phone,address,dm_sent:'Y',dm_sent_date};
   if(productOnly){
-    const address=(document.getElementById('p-address').value||'').trim();
-    if(!address){alert('제품만 협찬은 배송 주소를 입력해야 다음 단계로 넘어갈 수 있습니다.');return}
-    changes.stage=5;changes.product_only='Y';changes.address=address;
+    changes.stage=6;changes.product_only='Y';
   }else{
     changes.stage=getNextStageId(Number(inf.stage));
   }
@@ -653,10 +660,23 @@ async function completeDmStage(){
 }
 function toggleStage2ProductOnly(){
   stage2ProductOnly=!stage2ProductOnly;
-  const wrap=document.getElementById('p-address-wrap');
   const btn=document.getElementById('p-po-btn');
-  if(wrap)wrap.style.display=stage2ProductOnly?'':'none';
   if(btn){btn.className='btn btn-sm '+(stage2ProductOnly?'btn-success':'btn-outline');btn.innerHTML='📦 제품만 협찬'+(stage2ProductOnly?' ✓':'');}
+}
+function copyField(field,e){
+  const inf=localGet(selectedId);if(!inf)return;
+  const v=field==='all'?[inf.influencer_name,inf.phone,inf.address].map(x=>String(x||'').trim()).filter(Boolean).join('\n'):String(inf[field]||'').trim();
+  if(!v)return;
+  navigator.clipboard.writeText(v).then(()=>{if(e&&e.target){const b=e.target;const o=b.textContent;b.textContent='✓복사됨';setTimeout(()=>b.textContent=o,1500)}});
+}
+async function completeProductShip(){
+  const inf=localGet(selectedId);if(!inf)return;
+  const next=getNextStageId(Number(inf.stage));if(next===null)return;
+  const product_sent_date=inf.product_sent_date||new Date().toISOString().split('T')[0];
+  const backup={...inf};
+  localUpdate(selectedId,{stage:next,product_sent_date});render();renderPanel();
+  syncStart();const r=await api('update',{id:selectedId,stage:next,product_sent_date});syncEnd();
+  if(!r.success){localUpdate(selectedId,backup);render();renderPanel();alert('저장 실패: '+(r.error||''))}
 }
 async function advanceStage(){
   const inf=localGet(selectedId);const next=getNextStageId(Number(inf.stage));if(next===null)return;
