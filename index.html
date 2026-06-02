@@ -121,6 +121,11 @@ input[type=file]{background:var(--surface2);border:1px dashed var(--border);colo
 .role-header.part{color:#ffc107}
 .role-header.boss{color:#e74c3c}
 .role-section .cards{margin-bottom:0}
+.product-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+.ptab{padding:6px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;font-size:13px;font-weight:500;transition:all .15s;white-space:nowrap}
+.ptab.active{background:var(--primary);border-color:var(--primary);color:#fff}
+.ptab:hover:not(.active){border-color:#555}
+.ptab-add{color:var(--primary);border-style:dashed}
 @media(max-width:600px){
   .todo-grid{grid-template-columns:1fr}
   #detail-panel{width:100%;right:-100%}
@@ -158,6 +163,7 @@ input[type=file]{background:var(--surface2);border:1px dashed var(--border);colo
   </div>
 
   <div id="tab-management" class="tab">
+    <div id="product-tabs" class="product-tabs"></div>
     <div class="toolbar">
       <input type="text" id="search-input" placeholder="계정명 또는 이름 검색..." oninput="renderList()">
       <button class="btn btn-primary" onclick="openAddModal()">+ 추가</button>
@@ -203,6 +209,7 @@ input[type=file]{background:var(--surface2);border:1px dashed var(--border);colo
 <div class="overlay" id="add-overlay" onclick="closeAddModal(event)">
   <div class="modal" onclick="event.stopPropagation()">
     <h3>인플루언서 추가</h3>
+    <div class="fg"><label>협찬 제품</label><input type="text" id="add-product" list="product-datalist" placeholder="제품명 입력 또는 선택"></div>
     <div class="fg"><label>인스타그램 URL</label><input type="text" id="insta-url" placeholder="https://www.instagram.com/계정명/reels/" oninput="parseUrl()"></div>
     <div class="fg"><label>계정명 (자동)</label><input type="text" id="add-instagram-id" class="auto-fill" readonly></div>
     <div class="fg"><label>릴스 주소 (자동)</label><input type="text" id="add-reels-url" class="auto-fill" readonly></div>
@@ -224,6 +231,8 @@ input[type=file]{background:var(--surface2);border:1px dashed var(--border);colo
   <div class="panel-body" id="panel-body"></div>
 </div>
 
+<datalist id="product-datalist"></datalist>
+
 <script>
 const SCRIPT_URL='https://script.google.com/macros/s/AKfycbyu2pRScWpq3WhsK9aA7WhEXWYlGvA_0YiG4xuX8YmBP34A8BX9dUph2QgcfbuLGdo/exec';
 
@@ -239,6 +248,7 @@ const STAGES=[
 let influencers=[],selectedId=null,currentFilter='all';
 let selectedIds=new Set();
 let stage2ProductOnly=false;
+let currentProduct='all';
 const uploadedFiles={};
 
 function getNextStageId(s){
@@ -323,7 +333,7 @@ function switchTab(name,btn){
   document.getElementById('tab-'+name).classList.add('active');btn.classList.add('active');closePanel();
   if(name==='settlement')renderSettlement();
 }
-function render(){renderDashboard();renderFilterTabs();renderList()}
+function render(){renderDashboard();renderProductTabs();refreshProductDatalist();renderFilterTabs();renderList()}
 
 function renderDashboard(){
   const active=influencers.filter(i=>i.status==='active');
@@ -348,16 +358,53 @@ function renderDashboard(){
   document.getElementById('part-todo').innerHTML=partItems.length===0?emptyTodo:partItems.map(todoItemHtml).join('');
 }
 
+function escJs(s){return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'");}
+function getProducts(){
+  const fromData=influencers.filter(i=>i.status!=='deleted'&&String(i.product||'').trim()).map(i=>String(i.product).trim());
+  let fromLocal=[];try{fromLocal=JSON.parse(localStorage.getItem('hattke_products')||'[]')}catch(e){}
+  return [...new Set([...fromLocal,...fromData])].sort((a,b)=>a.localeCompare(b,'ko'));
+}
+function addProduct(name){
+  name=(name||'').trim();if(!name)return;
+  let local=[];try{local=JSON.parse(localStorage.getItem('hattke_products')||'[]')}catch(e){}
+  if(!local.includes(name)){local.push(name);localStorage.setItem('hattke_products',JSON.stringify(local));}
+}
+function productMatch(i){
+  if(currentProduct==='all')return true;
+  const p=String(i.product||'').trim();
+  return currentProduct==='__none__'?!p:p===currentProduct;
+}
+function refreshProductDatalist(){
+  const dl=document.getElementById('product-datalist');
+  if(dl)dl.innerHTML=getProducts().map(p=>`<option value="${escHtml(p)}"></option>`).join('');
+}
+function renderProductTabs(){
+  const products=getProducts();
+  const cnt=pred=>influencers.filter(i=>i.status!=='deleted'&&pred(i)).length;
+  let html=`<div class="ptab ${currentProduct==='all'?'active':''}" onclick="setProduct('all')">전체 (${cnt(()=>true)})</div>`;
+  products.forEach(p=>{html+=`<div class="ptab ${currentProduct===p?'active':''}" onclick="setProduct('${escJs(p)}')">${escHtml(p)} (${cnt(i=>String(i.product||'').trim()===p)})</div>`;});
+  html+=`<div class="ptab ${currentProduct==='__none__'?'active':''}" onclick="setProduct('__none__')">미지정 (${cnt(i=>!String(i.product||'').trim())})</div>`;
+  html+=`<div class="ptab ptab-add" onclick="promptAddProduct()">+ 제품 추가</div>`;
+  const el=document.getElementById('product-tabs');if(el)el.innerHTML=html;
+}
+function setProduct(p){currentProduct=p;renderProductTabs();renderFilterTabs();renderList();}
+function promptAddProduct(){
+  const name=prompt('새 제품 분류 이름을 입력하세요');
+  if(name===null)return;
+  const n=name.trim();if(!n)return;
+  addProduct(n);currentProduct=n;
+  refreshProductDatalist();renderProductTabs();renderFilterTabs();renderList();
+}
 function renderFilterTabs(){
-  const active=influencers.filter(i=>i.status==='active');
+  const active=influencers.filter(i=>i.status==='active'&&productMatch(i));
   let html=`<div class="filter-tab ${currentFilter==='all'?'active':''}" onclick="setFilter('all')">전체 (${active.length})</div>`;
   STAGES.forEach(s=>{
     const count=s.id===0?active.filter(i=>Number(i.stage)===0||Number(i.stage)===1).length:active.filter(i=>Number(i.stage)===s.id).length;
     html+=`<div class="filter-tab ${currentFilter===s.id?'active':''}" onclick="setFilter(${s.id})">${getStageRole(s.id)==='boss'?'🔴':'🟡'} ${s.name} (${count})</div>`;
   });
-  const rejCount=influencers.filter(i=>i.status==='rejected').length;
+  const rejCount=influencers.filter(i=>i.status==='rejected'&&productMatch(i)).length;
   html+=`<div class="filter-tab ${currentFilter==='rejected'?'active':''}" onclick="setFilter('rejected')">거절됨 (${rejCount})</div>`;
-  const doneCount=influencers.filter(i=>i.status==='done').length;
+  const doneCount=influencers.filter(i=>i.status==='done'&&productMatch(i)).length;
   html+=`<div class="filter-tab ${currentFilter==='done'?'active':''}" onclick="setFilter('done')">완료됨 (${doneCount})</div>`;
   document.getElementById('filter-tabs').innerHTML=html;
 }
@@ -372,6 +419,7 @@ function getFilteredList(){
   else if(currentFilter!=='all'){
     list=currentFilter===0?influencers.filter(i=>i.status==='active'&&(Number(i.stage)===0||Number(i.stage)===1)):influencers.filter(i=>i.status==='active'&&Number(i.stage)===currentFilter);
   }else list=influencers.filter(i=>i.status==='active');
+  list=list.filter(productMatch);
   if(search)list=list.filter(i=>(i.instagram_id||'').toLowerCase().includes(search)||(i.name||'').toLowerCase().includes(search));
   return list;
 }
@@ -487,6 +535,8 @@ async function quickAdvance(id,e){
 function openAddModal(){
   ['insta-url','add-instagram-id','add-reels-url','add-name','add-followers'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('add-recruited-date').value=new Date().toISOString().split('T')[0];
+  refreshProductDatalist();
+  document.getElementById('add-product').value=(currentProduct!=='all'&&currentProduct!=='__none__')?currentProduct:'';
   document.getElementById('add-overlay').classList.add('open');
 }
 function closeAddModal(e){if(!e||e.target===document.getElementById('add-overlay'))document.getElementById('add-overlay').classList.remove('open')}
@@ -495,7 +545,8 @@ async function submitAdd(){
   const instagram_id=document.getElementById('add-instagram-id').value.trim();
   if(!instagram_id)return alert('URL을 먼저 입력해주세요.');
   const tempId='temp_'+Date.now();
-  const item={id:tempId,_opt:true,instagram_id,nickname:instagram_id,name:document.getElementById('add-name').value.trim(),followers:document.getElementById('add-followers').value.trim(),reels_url:document.getElementById('add-reels-url').value.trim(),recruited_date:document.getElementById('add-recruited-date').value,stage:0,status:'active',memo:''};
+  const item={id:tempId,_opt:true,instagram_id,nickname:instagram_id,name:document.getElementById('add-name').value.trim(),followers:document.getElementById('add-followers').value.trim(),reels_url:document.getElementById('add-reels-url').value.trim(),recruited_date:document.getElementById('add-recruited-date').value,product:document.getElementById('add-product').value.trim(),stage:0,status:'active',memo:''};
+  if(item.product)addProduct(item.product);
   localAdd(item);closeAddModal();render();
   syncStart();const r=await api('add',item);syncEnd();
   if(r.success){localUpdate(tempId,{id:r.id,_opt:false});render()}
@@ -532,7 +583,8 @@ function renderPanel(){
     <div class="fg"><label>실명 (계약/입금용)</label><input type="text" id="p-inf-name" value="${inf.influencer_name||''}"></div>
     <div class="fg"><label>연락처</label><input type="tel" id="p-phone" value="${inf.phone||''}" placeholder="010-0000-0000"></div>`;
   const infoHtml=`<div class="section-title">기본 정보</div>
-    <div class="fg"><label>이름 (별칭)</label><input type="text" id="p-name" value="${inf.name||''}"></div>${contactRows}
+    <div class="fg"><label>이름 (별칭)</label><input type="text" id="p-name" value="${inf.name||''}"></div>
+    <div class="fg"><label>협찬 제품</label><input type="text" id="p-product" list="product-datalist" value="${escHtml(inf.product)}" placeholder="제품명"></div>${contactRows}
     <div class="fg"><label>팔로워 수</label><input type="text" id="p-followers" value="${inf.followers||''}"></div>
     <div class="fg"><label>모집일</label><input type="date" id="p-recruited" value="${rv!=='-'?rv:''}"></div>
     <div class="fg"><label>메모</label><textarea id="p-memo">${inf.memo||''}</textarea></div>
@@ -630,13 +682,15 @@ function copyText(text){
 
 async function saveBasicInfo(){
   const cur=localGet(selectedId);
-  const elInf=document.getElementById('p-inf-name'),elPhone=document.getElementById('p-phone');
+  const elInf=document.getElementById('p-inf-name'),elPhone=document.getElementById('p-phone'),elProduct=document.getElementById('p-product');
   const name=document.getElementById('p-name').value;
+  const product=elProduct?elProduct.value.trim():(cur.product||'');
   const influencer_name=elInf?elInf.value:(cur.influencer_name||'');
   const phone=elPhone?elPhone.value:(cur.phone||'');
   const followers=document.getElementById('p-followers').value,recruited_date=document.getElementById('p-recruited').value,memo=document.getElementById('p-memo').value;
-  const backup={...cur};localUpdate(selectedId,{name,influencer_name,phone,followers,recruited_date,memo});renderPanel();renderDashboard();
-  syncStart();const r=await api('update',{id:selectedId,name,influencer_name,phone,followers,recruited_date,memo});syncEnd();
+  if(product)addProduct(product);
+  const backup={...cur};localUpdate(selectedId,{name,product,influencer_name,phone,followers,recruited_date,memo});renderPanel();renderDashboard();renderProductTabs();refreshProductDatalist();
+  syncStart();const r=await api('update',{id:selectedId,name,product,influencer_name,phone,followers,recruited_date,memo});syncEnd();
   if(!r.success){localUpdate(selectedId,backup);renderPanel();alert('저장 실패: '+r.error)}
 }
 async function completeDmStage(){
