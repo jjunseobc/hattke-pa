@@ -368,6 +368,7 @@ function renderList(){
   tbody.innerHTML=list.map(i=>{
     const si=i.status==='rejected'?{name:'거절됨',color:'#e74c3c'}:i.status==='done'?{name:'완료됨',color:'#22c55e'}:getStageInfo(i.stage);
     const isListing=i.status==='active'&&(Number(i.stage)===0||Number(i.stage)===1);
+    const isDmStage=i.status==='active'&&Number(i.stage)===2;
     const isRejected=i.status==='rejected';
     const dmForced=!isListing&&!isRejected;
     const dmY=dmForced?true:i.dm_sent==='Y';
@@ -376,6 +377,8 @@ function renderList(){
     let dmBtn;
     if(isListing){
       dmBtn=`<button class="btn btn-sm" style="min-width:32px;background:${i.dm_sent==='Y'?'var(--success)':'var(--surface3)'};color:${i.dm_sent==='Y'?'#fff':'var(--muted)'};border:1px solid ${i.dm_sent==='Y'?'var(--success)':'var(--border)'}" onclick="dmAndAdvance('${i.id}',event)">${i.dm_sent==='Y'?'Y':'N'}</button>`;
+    }else if(isDmStage){
+      dmBtn=`<button class="btn btn-sm" title="다시 누르면 리스팅 목록으로 되돌립니다" style="min-width:32px;background:var(--success);color:#fff;border:1px solid var(--success)" onclick="dmRevert('${i.id}',event)">Y</button>`;
     }else if(isRejected){
       dmBtn=`<button class="btn btn-sm" style="min-width:32px;background:${i.dm_sent==='Y'?'var(--success)':'var(--surface3)'};color:${i.dm_sent==='Y'?'#fff':'var(--muted)'};border:1px solid ${i.dm_sent==='Y'?'var(--success)':'var(--border)'}" onclick="toggleDm('${i.id}',event)">${i.dm_sent==='Y'?'Y':'N'}</button>`;
     }else{
@@ -419,6 +422,14 @@ async function dmAndAdvance(id,e){
   localUpdate(id,{dm_sent:'Y',stage:nextStage});render();
   syncStart();const r=await api('update',{id,dm_sent:'Y',stage:nextStage});syncEnd();
   if(!r.success){localUpdate(id,{dm_sent:prevDm,stage:prevStage});render();alert('저장 실패: '+r.error)}
+}
+async function dmRevert(id,e){
+  e.stopPropagation();
+  const inf=localGet(id);if(!inf||inf.status!=='active')return;
+  const prevStage=Number(inf.stage);const prevDm=inf.dm_sent;const prevDate=inf.dm_sent_date;
+  localUpdate(id,{dm_sent:'N',stage:0,dm_sent_date:''});render();if(String(selectedId)===String(id))renderPanel();
+  syncStart();const r=await api('update',{id,dm_sent:'N',stage:0,dm_sent_date:''});syncEnd();
+  if(!r.success){localUpdate(id,{dm_sent:prevDm,stage:prevStage,dm_sent_date:prevDate});render();if(String(selectedId)===String(id))renderPanel();alert('저장 실패: '+r.error)}
 }
 async function toggleSponsorship(id,e){
   e.stopPropagation();
