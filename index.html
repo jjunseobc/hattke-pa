@@ -126,8 +126,8 @@ input[type=file]{background:var(--surface2);border:1px dashed var(--border);colo
 .ptab.active{background:var(--primary);border-color:var(--primary);color:#fff}
 .ptab:hover:not(.active){border-color:#555}
 .ptab-add{color:var(--primary);border-style:dashed}
-.filter-tab.drop-target{border-color:var(--primary)!important;background:#1a2540;color:var(--primary);box-shadow:0 0 0 2px rgba(79,142,247,.35)}
-body.dragging-row .filter-tab{border-style:dashed}
+.filter-tab.drop-target,.ptab.drop-target{border-color:var(--primary)!important;background:#1a2540;color:var(--primary);box-shadow:0 0 0 2px rgba(79,142,247,.35)}
+body.dragging-row .filter-tab,body.dragging-row .ptab:not(.ptab-add){border-style:dashed}
 tbody tr[draggable="true"]{cursor:grab}
 @media(max-width:600px){
   .todo-grid{grid-template-columns:1fr}
@@ -178,7 +178,7 @@ tbody tr[draggable="true"]{cursor:grab}
       <button class="btn btn-outline btn-sm" onclick="clearSelection()">✕ 해제</button>
     </div>
     <div id="filter-tabs" class="filter-tabs"></div>
-    <div class="text-muted" style="margin:0 0 8px 2px">💡 행을 위쪽 단계 탭으로 끌어다 놓으면 단계를 옮길 수 있어요 (PC 기준)</div>
+    <div class="text-muted" style="margin:0 0 8px 2px">💡 행을 위쪽 제품 탭 또는 단계 탭으로 끌어다 놓으면 제품·단계를 바꿀 수 있어요 (PC 기준)</div>
     <div class="table-wrap">
       <table>
         <thead><tr>
@@ -386,8 +386,8 @@ function renderProductTabs(){
   const products=getProducts();
   const cnt=pred=>influencers.filter(i=>i.status!=='deleted'&&pred(i)).length;
   let html=`<div class="ptab ${currentProduct==='all'?'active':''}" onclick="setProduct('all')">전체 (${cnt(()=>true)})</div>`;
-  products.forEach(p=>{html+=`<div class="ptab ${currentProduct===p?'active':''}" onclick="setProduct('${escJs(p)}')">${escHtml(p)} (${cnt(i=>String(i.product||'').trim()===p)})</div>`;});
-  html+=`<div class="ptab ${currentProduct==='__none__'?'active':''}" onclick="setProduct('__none__')">미지정 (${cnt(i=>!String(i.product||'').trim())})</div>`;
+  products.forEach(p=>{html+=`<div class="ptab ${currentProduct===p?'active':''}" onclick="setProduct('${escJs(p)}')" ondragover="onTabDragOver(event)" ondragleave="onTabDragLeave(event)" ondrop="onPtabDrop(event,'${escJs(p)}')">${escHtml(p)} (${cnt(i=>String(i.product||'').trim()===p)})</div>`;});
+  html+=`<div class="ptab ${currentProduct==='__none__'?'active':''}" onclick="setProduct('__none__')" ondragover="onTabDragOver(event)" ondragleave="onTabDragLeave(event)" ondrop="onPtabDrop(event,'__none__')">미지정 (${cnt(i=>!String(i.product||'').trim())})</div>`;
   html+=`<div class="ptab ptab-add" onclick="promptAddProduct()">+ 제품 추가</div>`;
   const el=document.getElementById('product-tabs');if(el)el.innerHTML=html;
 }
@@ -417,10 +417,21 @@ function jumpToFilter(id){switchTab('management',document.querySelectorAll('nav 
 
 let dragInfId=null;
 function onRowDragStart(e,id){dragInfId=id;try{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',id);}catch(_){}document.body.classList.add('dragging-row');}
-function onRowDragEnd(){document.body.classList.remove('dragging-row');dragInfId=null;document.querySelectorAll('.filter-tab.drop-target').forEach(el=>el.classList.remove('drop-target'));}
+function onRowDragEnd(){document.body.classList.remove('dragging-row');dragInfId=null;document.querySelectorAll('.drop-target').forEach(el=>el.classList.remove('drop-target'));}
 function onTabDragOver(e){if(dragInfId!==null){e.preventDefault();e.dataTransfer.dropEffect='move';e.currentTarget.classList.add('drop-target');}}
 function onTabDragLeave(e){e.currentTarget.classList.remove('drop-target');}
 function onTabDrop(e,target){e.preventDefault();e.currentTarget.classList.remove('drop-target');const id=dragInfId||(e.dataTransfer&&e.dataTransfer.getData('text/plain'));dragInfId=null;document.body.classList.remove('dragging-row');if(id!==null&&id!=='')dropToStage(id,target);}
+function onPtabDrop(e,product){e.preventDefault();e.currentTarget.classList.remove('drop-target');const id=dragInfId||(e.dataTransfer&&e.dataTransfer.getData('text/plain'));dragInfId=null;document.body.classList.remove('dragging-row');if(id!==null&&id!=='')dropToProduct(id,product);}
+async function dropToProduct(id,product){
+  const inf=localGet(id);if(!inf)return;
+  const newProduct=product==='__none__'?'':product;
+  if(String(inf.product||'')===newProduct)return;
+  if(newProduct)addProduct(newProduct);
+  const backup={...inf};
+  localUpdate(id,{product:newProduct});render();if(String(selectedId)===String(id))renderPanel();
+  syncStart();const r=await api('update',{id,product:newProduct});syncEnd();
+  if(!r.success){localUpdate(id,backup);render();if(String(selectedId)===String(id))renderPanel();alert('저장 실패: '+(r.error||''))}
+}
 async function dropToStage(id,target){
   const inf=localGet(id);if(!inf)return;
   if(target==='rejected'){
