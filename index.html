@@ -128,7 +128,10 @@ input[type=file]{background:var(--surface2);border:1px dashed var(--border);colo
 .ptab-add{color:var(--primary);border-style:dashed}
 .filter-tab.drop-target,.ptab.drop-target{border-color:var(--primary)!important;background:#1a2540;color:var(--primary);box-shadow:0 0 0 2px rgba(79,142,247,.35)}
 body.dragging-row .filter-tab,body.dragging-row .ptab:not(.ptab-add){border-style:dashed}
-tbody tr[draggable="true"]{cursor:grab}
+tbody tr[draggable="true"]{cursor:grab;-webkit-touch-callout:none}
+.drag-ghost{position:fixed;z-index:9999;left:0;top:0;transform:translate(-50%,-150%);background:var(--primary);color:#fff;padding:5px 11px;border-radius:8px;font-size:12px;font-weight:700;pointer-events:none;box-shadow:0 4px 14px rgba(0,0,0,.45);white-space:nowrap}
+body.dragging-row{-webkit-user-select:none;user-select:none}
+.prod-badge{display:inline-block;font-size:10px;font-weight:600;padding:1px 7px;border-radius:10px;border:1px solid;vertical-align:middle;margin-right:4px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media(max-width:600px){
   .todo-grid{grid-template-columns:1fr}
   #detail-panel{width:100%;right:-100%}
@@ -178,7 +181,7 @@ tbody tr[draggable="true"]{cursor:grab}
       <button class="btn btn-outline btn-sm" onclick="clearSelection()">✕ 해제</button>
     </div>
     <div id="filter-tabs" class="filter-tabs"></div>
-    <div class="text-muted" style="margin:0 0 8px 2px">💡 행을 위쪽 제품 탭 또는 단계 탭으로 끌어다 놓으면 제품·단계를 바꿀 수 있어요 (PC 기준)</div>
+    <div class="text-muted" style="margin:0 0 8px 2px">💡 행을 위쪽 제품 탭 또는 단계 탭으로 끌어다 놓으면 제품·단계를 바꿀 수 있어요 (모바일은 행을 길게 눌러 드래그)</div>
     <div class="table-wrap">
       <table>
         <thead><tr>
@@ -328,7 +331,7 @@ function localAdd(item){influencers.unshift(item)}
 
 window.onload=()=>{
   document.getElementById('add-recruited-date').value=new Date().toISOString().split('T')[0];
-  setThisMonth();showLoading();
+  setThisMonth();showLoading();initTouchDrag();
   api('getAll').then(r=>{hideLoading();if(r.success){influencers=r.data.filter(d=>d.status!=='deleted');render()}});
 };
 function switchTab(name,btn){
@@ -363,6 +366,7 @@ function renderDashboard(){
 }
 
 function escJs(s){return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'");}
+function productColor(name){let h=0;const s=String(name||'');for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))%360;return h;}
 function getProducts(){
   const fromData=influencers.filter(i=>i.status!=='deleted'&&String(i.product||'').trim()).map(i=>String(i.product).trim());
   let fromLocal=[];try{fromLocal=JSON.parse(localStorage.getItem('hattke_products')||'[]')}catch(e){}
@@ -386,8 +390,8 @@ function renderProductTabs(){
   const products=getProducts();
   const cnt=pred=>influencers.filter(i=>i.status!=='deleted'&&pred(i)).length;
   let html=`<div class="ptab ${currentProduct==='all'?'active':''}" onclick="setProduct('all')">전체 (${cnt(()=>true)})</div>`;
-  products.forEach(p=>{html+=`<div class="ptab ${currentProduct===p?'active':''}" onclick="setProduct('${escJs(p)}')" ondragover="onTabDragOver(event)" ondragleave="onTabDragLeave(event)" ondrop="onPtabDrop(event,'${escJs(p)}')">${escHtml(p)} (${cnt(i=>String(i.product||'').trim()===p)})</div>`;});
-  html+=`<div class="ptab ${currentProduct==='__none__'?'active':''}" onclick="setProduct('__none__')" ondragover="onTabDragOver(event)" ondragleave="onTabDragLeave(event)" ondrop="onPtabDrop(event,'__none__')">미지정 (${cnt(i=>!String(i.product||'').trim())})</div>`;
+  products.forEach(p=>{html+=`<div class="ptab ${currentProduct===p?'active':''}" onclick="setProduct('${escJs(p)}')" data-drop="product" data-product="${escHtml(p)}" ondragover="onTabDragOver(event)" ondragleave="onTabDragLeave(event)" ondrop="onPtabDrop(event,'${escJs(p)}')">${escHtml(p)} (${cnt(i=>String(i.product||'').trim()===p)})</div>`;});
+  html+=`<div class="ptab ${currentProduct==='__none__'?'active':''}" onclick="setProduct('__none__')" data-drop="none" ondragover="onTabDragOver(event)" ondragleave="onTabDragLeave(event)" ondrop="onPtabDrop(event,'__none__')">미지정 (${cnt(i=>!String(i.product||'').trim())})</div>`;
   html+=`<div class="ptab ptab-add" onclick="promptAddProduct()">+ 제품 추가</div>`;
   const el=document.getElementById('product-tabs');if(el)el.innerHTML=html;
 }
@@ -404,10 +408,10 @@ function renderFilterTabs(){
   let html=`<div class="filter-tab ${currentFilter==='all'?'active':''}" onclick="setFilter('all')">전체 (${active.length})</div>`;
   STAGES.forEach(s=>{
     const count=s.id===0?active.filter(i=>Number(i.stage)===0||Number(i.stage)===1).length:active.filter(i=>Number(i.stage)===s.id).length;
-    html+=`<div class="filter-tab ${currentFilter===s.id?'active':''}" onclick="setFilter(${s.id})" ondragover="onTabDragOver(event)" ondragleave="onTabDragLeave(event)" ondrop="onTabDrop(event,${s.id})">${getStageRole(s.id)==='boss'?'🔴':'🟡'} ${s.name} (${count})</div>`;
+    html+=`<div class="filter-tab ${currentFilter===s.id?'active':''}" onclick="setFilter(${s.id})" data-drop="stage" data-stage="${s.id}" ondragover="onTabDragOver(event)" ondragleave="onTabDragLeave(event)" ondrop="onTabDrop(event,${s.id})">${getStageRole(s.id)==='boss'?'🔴':'🟡'} ${s.name} (${count})</div>`;
   });
   const rejCount=influencers.filter(i=>i.status==='rejected'&&productMatch(i)).length;
-  html+=`<div class="filter-tab ${currentFilter==='rejected'?'active':''}" onclick="setFilter('rejected')" ondragover="onTabDragOver(event)" ondragleave="onTabDragLeave(event)" ondrop="onTabDrop(event,'rejected')">거절됨 (${rejCount})</div>`;
+  html+=`<div class="filter-tab ${currentFilter==='rejected'?'active':''}" onclick="setFilter('rejected')" data-drop="reject" ondragover="onTabDragOver(event)" ondragleave="onTabDragLeave(event)" ondrop="onTabDrop(event,'rejected')">거절됨 (${rejCount})</div>`;
   const doneCount=influencers.filter(i=>i.status==='done'&&productMatch(i)).length;
   html+=`<div class="filter-tab ${currentFilter==='done'?'active':''}" onclick="setFilter('done')">완료됨 (${doneCount})</div>`;
   document.getElementById('filter-tabs').innerHTML=html;
@@ -431,6 +435,72 @@ async function dropToProduct(id,product){
   localUpdate(id,{product:newProduct});render();if(String(selectedId)===String(id))renderPanel();
   syncStart();const r=await api('update',{id,product:newProduct});syncEnd();
   if(!r.success){localUpdate(id,backup);render();if(String(selectedId)===String(id))renderPanel();alert('저장 실패: '+(r.error||''))}
+}
+
+let lpTimer=null,touchStartX=0,touchStartY=0,touchDragging=false,touchGhost=null,touchDragId=null,lastDropEl=null;
+function initTouchDrag(){
+  const tb=document.getElementById('influencer-table');if(!tb)return;
+  tb.addEventListener('touchstart',handleTouchStart,{passive:false});
+  tb.addEventListener('touchmove',handleTouchMove,{passive:false});
+  tb.addEventListener('touchend',handleTouchEnd);
+  tb.addEventListener('touchcancel',handleTouchEnd);
+}
+function handleTouchStart(e){
+  if(touchDragging)return;
+  if(e.target.closest('button,input,a'))return;
+  const tr=e.target.closest('tr');if(!tr)return;
+  const id=tr.getAttribute('data-id');if(!id)return;
+  const t=e.touches[0];touchStartX=t.clientX;touchStartY=t.clientY;
+  if(lpTimer)clearTimeout(lpTimer);
+  lpTimer=setTimeout(()=>{lpTimer=null;startTouchDrag(id,touchStartX,touchStartY);},350);
+}
+function handleTouchMove(e){
+  const t=e.touches[0];if(!t)return;
+  if(!touchDragging){
+    if(lpTimer&&(Math.abs(t.clientX-touchStartX)>10||Math.abs(t.clientY-touchStartY)>10)){clearTimeout(lpTimer);lpTimer=null;}
+    return;
+  }
+  e.preventDefault();
+  moveGhost(t.clientX,t.clientY);
+  const el=touchDropTargetAt(t.clientX,t.clientY);
+  if(el!==lastDropEl){if(lastDropEl)lastDropEl.classList.remove('drop-target');if(el)el.classList.add('drop-target');lastDropEl=el;}
+}
+function handleTouchEnd(e){
+  if(lpTimer){clearTimeout(lpTimer);lpTimer=null;}
+  if(!touchDragging)return;
+  if(e.cancelable)e.preventDefault();
+  const t=e.changedTouches&&e.changedTouches[0];
+  let el=lastDropEl;
+  if(t)el=touchDropTargetAt(t.clientX,t.clientY)||lastDropEl;
+  endTouchDrag(el);
+}
+function startTouchDrag(id,x,y){
+  touchDragging=true;touchDragId=id;document.body.classList.add('dragging-row');
+  const inf=localGet(id);
+  const g=document.createElement('div');g.className='drag-ghost';
+  g.textContent='@'+(inf?(inf.instagram_id||inf.nickname||''):'');
+  document.body.appendChild(g);touchGhost=g;moveGhost(x,y);
+  if(navigator.vibrate){try{navigator.vibrate(15)}catch(_){}}
+}
+function moveGhost(x,y){if(touchGhost){touchGhost.style.left=x+'px';touchGhost.style.top=y+'px';}}
+function touchDropTargetAt(x,y){
+  if(touchGhost)touchGhost.style.display='none';
+  const el=document.elementFromPoint(x,y);
+  if(touchGhost)touchGhost.style.display='';
+  const tab=el&&el.closest&&el.closest('[data-drop]');
+  return tab||null;
+}
+function endTouchDrag(el){
+  if(touchGhost){touchGhost.remove();touchGhost=null;}
+  document.body.classList.remove('dragging-row');
+  document.querySelectorAll('.drop-target').forEach(t=>t.classList.remove('drop-target'));
+  const id=touchDragId;touchDragging=false;touchDragId=null;lastDropEl=null;
+  if(!el||!id)return;
+  const kind=el.getAttribute('data-drop');
+  if(kind==='stage')dropToStage(id,Number(el.getAttribute('data-stage')));
+  else if(kind==='reject')dropToStage(id,'rejected');
+  else if(kind==='product')dropToProduct(id,el.getAttribute('data-product'));
+  else if(kind==='none')dropToProduct(id,'__none__');
 }
 async function dropToStage(id,target){
   const inf=localGet(id);if(!inf)return;
@@ -477,6 +547,8 @@ function renderList(){
   if(list.length===0){tbody.innerHTML=`<tr><td colspan="12"><div class="empty">인플루언서가 없습니다.</div></td></tr>`;return}
   tbody.innerHTML=list.map(i=>{
     const si=i.status==='rejected'?{name:'거절됨',color:'#e74c3c'}:i.status==='done'?{name:'완료됨',color:'#22c55e'}:getStageInfo(i.stage);
+    const _ph=i.product?productColor(i.product):0;
+    const prodBadge=i.product?`<span class="prod-badge" style="background:hsl(${_ph},45%,17%);color:hsl(${_ph},78%,72%);border-color:hsl(${_ph},40%,32%)">${escHtml(i.product)}</span> `:'';
     const isListing=i.status==='active'&&(Number(i.stage)===0||Number(i.stage)===1);
     const isDmStage=i.status==='active'&&Number(i.stage)===2;
     const isRejected=i.status==='rejected';
@@ -494,9 +566,9 @@ function renderList(){
     }else{
       dmBtn=`<span class="btn btn-sm" style="min-width:32px;background:var(--success);color:#fff;border:1px solid var(--success);cursor:default">Y</span>`;
     }
-    return`<tr class="${String(selectedId)===String(i.id)?'selected':''} ${i._opt?'optimistic':''}" draggable="true" ondragstart="onRowDragStart(event,'${i.id}')" ondragend="onRowDragEnd()" onclick="openDetail('${i.id}')">
+    return`<tr class="${String(selectedId)===String(i.id)?'selected':''} ${i._opt?'optimistic':''}" data-id="${i.id}" draggable="true" ondragstart="onRowDragStart(event,'${i.id}')" ondragend="onRowDragEnd()" onclick="openDetail('${i.id}')">
       <td onclick="event.stopPropagation()"><input type="checkbox" ${selectedIds.has(String(i.id))?'checked':''} onchange="toggleSelect('${i.id}',event)"></td>
-      <td><b>@${i.instagram_id||i.nickname||'-'}</b></td><td>${i.name||'-'}</td>
+      <td>${prodBadge}<b>@${i.instagram_id||i.nickname||'-'}</b></td><td>${i.name||'-'}</td>
       <td class="muted">${i.followers?formatFollowers(i.followers):'-'}</td>
       <td class="muted">${formatDate(i.recruited_date)}</td>
       <td><span class="stage-badge" style="background:${si.color}22;color:${si.color}">${si.name}</span></td>
