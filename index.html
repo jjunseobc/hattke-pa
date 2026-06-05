@@ -160,7 +160,7 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <button onclick="switchTab('settlement',this)">정산</button>
     </nav>
     <button class="btn btn-outline btn-sm" style="margin-left:auto;white-space:nowrap" onclick="openHelp()">📖 프로그램 사용법</button>
-    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.7</button>
+    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.8</button>
     <span id="sync-badge">동기화 중...</span>
   </header>
 
@@ -188,6 +188,7 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <span id="bulk-count" style="font-weight:600;color:var(--primary)"></span>
       <button class="btn btn-primary btn-sm" onclick="bulkAdvance()">→ 다음 단계로</button>
       <button class="btn btn-sm" style="background:none;border:1px solid var(--danger);color:var(--danger)" onclick="bulkReject()">거절됨으로</button>
+      <button class="btn btn-danger btn-sm" onclick="bulkDelete()">🗑 삭제</button>
       <button class="btn btn-outline btn-sm" onclick="clearSelection()">✕ 해제</button>
     </div>
     <div id="filter-tabs" class="filter-tabs"></div>
@@ -433,7 +434,7 @@ window.onload=()=>{
   document.getElementById('add-recruited-date').value=new Date().toISOString().split('T')[0];
   setThisMonth();showLoading();initTouchDrag();
   const vb=document.getElementById('version-btn');if(vb)vb.textContent=APP_VERSION;
-  api('getAll').then(r=>{hideLoading();if(r.success){influencers=r.data.filter(d=>d.status!=='deleted');render()}});
+  api('getAll').then(r=>{hideLoading();if(r.success){influencers=r.data.filter(d=>['active','rejected','done'].includes(String(d.status||'').trim()));render()}});
   api('getSettlements').then(r=>{if(r.success&&r.data){settlements=r.data;if(document.getElementById('tab-settlement').classList.contains('active'))renderSettlement();}});
   api('getGuides').then(r=>{if(r.success&&r.data){guides=r.data;if(document.getElementById('tab-guide').classList.contains('active')){renderGuideTabs();renderGuideList();}}else{const el=document.getElementById('guide-list');if(el)el.innerHTML='<div class="empty">가이드를 불러오지 못했습니다. (백엔드 재배포 필요할 수 있음)</div>';}});
 };
@@ -745,6 +746,24 @@ async function bulkReject(){
   ids.forEach(id=>{const inf=localGet(id);if(inf&&inf.status==='active')localUpdate(id,{status:'rejected'})});
   selectedIds.clear();updateBulkBar();render();
   syncStart();await Promise.all(ids.map(id=>api('update',{id,status:'rejected'})));syncEnd();
+}
+async function bulkDelete(){
+  if(!confirm(selectedIds.size+'명을 완전히 삭제할까요?\n삭제 후 복구할 수 없습니다.'))return;
+  const ids=[...selectedIds];
+  ids.forEach(id=>localRemove(id));
+  selectedIds.clear();updateBulkBar();render();closePanel();
+  syncStart();
+  const results=await Promise.all(ids.map(id=>{
+    const url=new URL(SCRIPT_URL);url.searchParams.set('action','delete');url.searchParams.set('id',id);
+    return fetch(url.toString()).then(r=>r.json()).catch(e=>({success:false,error:e.message}));
+  }));
+  syncEnd();
+  const failed=results.filter(r=>!r.success).length;
+  if(failed>0){
+    alert(failed+'명 삭제에 실패했습니다. 목록을 다시 불러옵니다.');
+    showLoading();const r=await api('getAll');hideLoading();
+    if(r.success){influencers=r.data.filter(d=>['active','rejected','done'].includes(String(d.status||'').trim()));render();}
+  }
 }
 async function quickAdvance(id,e){
   if(e)e.stopPropagation();
@@ -1115,8 +1134,9 @@ function cancelSettle(){
 function openHelp(){document.getElementById('help-overlay').classList.add('open')}
 function closeHelp(e){if(!e||e.target===document.getElementById('help-overlay'))document.getElementById('help-overlay').classList.remove('open')}
 
-const APP_VERSION='v2.7';
+const APP_VERSION='v2.8';
 const CHANGELOG=[
+  {v:'v2.8',d:'2026-06-05',items:['선택 항목 일괄 삭제 기능 추가','상태값이 비정상인 행이 카운트에 잡히던 문제 수정']},
   {v:'v2.7',d:'2026-06-05',items:['역할 명칭 변경 — 아르바이트 → 매니저, 사장 → 관리자']},
   {v:'v2.6',d:'2026-06-05',items:['우측 상단 버전 표시·업데이트 내역 보기 추가']},
   {v:'v2.5',d:'2026-06-05',items:['📖 프로그램 사용법 안내 추가','인플루언서 DM 가이드 탭 신설 — 제품별 분류, 원클릭 복사, 관리자 등록(모든 기기 공유)']},
