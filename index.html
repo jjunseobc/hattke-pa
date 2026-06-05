@@ -21,7 +21,7 @@ nav{display:flex}
 nav button{background:none;border:none;color:var(--muted);padding:16px 16px;cursor:pointer;font-size:14px;border-bottom:2px solid transparent;transition:all .15s}
 nav button.active{color:var(--primary);border-bottom-color:var(--primary)}
 nav button:hover:not(.active){color:var(--text)}
-#sync-badge{font-size:11px;color:var(--muted);padding:2px 8px;border-radius:10px;background:var(--surface2);display:none;margin-left:auto}
+#sync-badge{font-size:11px;color:var(--muted);padding:2px 8px;border-radius:10px;background:var(--surface2);display:none}
 #sync-badge.show{display:inline-block}
 .tab{display:none;padding:20px 24px;max-width:1300px;margin:0 auto}
 .tab.active{display:block}
@@ -126,6 +126,13 @@ input[type=file]{background:var(--surface2);border:1px dashed var(--border);colo
 .ptab.active{background:var(--primary);border-color:var(--primary);color:#fff}
 .ptab:hover:not(.active){border-color:#555}
 .ptab-add{color:var(--primary);border-style:dashed}
+.guide-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px}
+.guide-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.guide-content{white-space:pre-wrap;word-break:break-word;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:13px;font-family:inherit;margin:0 0 10px;max-height:260px;overflow-y:auto}
+.help-body{font-size:13px;line-height:1.75;max-height:62vh;overflow-y:auto;padding-right:4px}
+.help-body h4{font-size:13px;color:var(--primary);margin:14px 0 5px}
+.help-body h4:first-child{margin-top:0}
+.help-body p{margin:0 0 3px}
 .filter-tab.drop-target,.ptab.drop-target{border-color:var(--primary)!important;background:#1a2540;color:var(--primary);box-shadow:0 0 0 2px rgba(79,142,247,.35)}
 body.dragging-row .filter-tab,body.dragging-row .ptab:not(.ptab-add){border-style:dashed}
 tbody tr[draggable="true"]{cursor:grab;-webkit-touch-callout:none}
@@ -149,8 +156,10 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
     <nav>
       <button class="active" onclick="switchTab('dashboard',this)">대시보드</button>
       <button onclick="switchTab('management',this)">인플루언서 관리</button>
+      <button onclick="switchTab('guide',this)">인플루언서 DM 가이드</button>
       <button onclick="switchTab('settlement',this)">정산</button>
     </nav>
+    <button class="btn btn-outline btn-sm" style="margin-left:auto;white-space:nowrap" onclick="openHelp()">📖 프로그램 사용법</button>
     <span id="sync-badge">동기화 중...</span>
   </header>
 
@@ -212,6 +221,15 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       </table>
     </div>
   </div>
+
+  <div id="tab-guide" class="tab">
+    <div id="guide-product-tabs" class="product-tabs"></div>
+    <div class="toolbar">
+      <span class="text-muted">대화 가이드를 [📋 복사]해서 인스타 DM에 바로 활용하세요.</span>
+      <button class="btn btn-primary" style="margin-left:auto" onclick="openGuideModal()">+ 가이드 추가 (관리자)</button>
+    </div>
+    <div id="guide-list"><div class="empty">로딩 중...</div></div>
+  </div>
 </div>
 
 <div class="overlay" id="admin-overlay" onclick="closeAdminLogin(event)">
@@ -225,6 +243,56 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <button class="btn btn-outline" onclick="closeAdminLogin()">취소</button>
       <button class="btn btn-primary" onclick="submitAdminLogin()">로그인</button>
     </div>
+  </div>
+</div>
+
+<div class="overlay" id="guide-overlay" onclick="closeGuideModal(event)">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:520px">
+    <h3 id="guide-modal-title">DM 가이드 추가</h3>
+    <div class="fg"><label>적용 제품 (비워두면 공통 — 모든 제품에 표시)</label><input type="text" id="guide-product" list="product-datalist" placeholder="제품명 입력 또는 선택"></div>
+    <div class="fg"><label>제목</label><input type="text" id="guide-title" placeholder="예: 첫 DM 인사말"></div>
+    <div class="fg"><label>내용 (아르바이트가 복사해 갈 대화문)</label><textarea id="guide-content" style="min-height:160px" placeholder="안녕하세요! ..."></textarea></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeGuideModal()">취소</button>
+      <button class="btn btn-primary" onclick="submitGuide()">저장</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="help-overlay" onclick="closeHelp(event)">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:580px">
+    <h3>📖 프로그램 사용법</h3>
+    <div class="help-body">
+      <h4>■ 전체 진행 흐름</h4>
+      <p>리스팅 목록 → DM 발송 완료/진행 대기 → 계약서발송/수집 → 제품 발송 → 광고 코드/입금정보 수집 → 광고세팅/입금 → 완료</p>
+      <h4>■ 역할 구분</h4>
+      <p>🟡 <b>아르바이트</b>: 리스팅, DM 발송, 제품 발송, 광고 코드/입금정보 수집</p>
+      <p>🔴 <b>사장</b>: 계약서발송/수집, 광고세팅/입금, 정산 완료 처리</p>
+      <h4>■ 인플루언서 추가</h4>
+      <p>1) [인플루언서 관리] 상단에서 <b>제품 탭</b>을 먼저 선택하세요 (없으면 [+ 제품 추가]).</p>
+      <p>2) [+ 추가] 버튼 → 인스타그램 URL을 붙여넣으면 계정명·릴스 주소가 자동 입력됩니다.</p>
+      <h4>■ DM 발송 단계</h4>
+      <p>· 리스팅 목록에서 DM발송 <b>N</b> 버튼을 누르면 DM 발송 단계로 이동합니다 (다시 누르면 리스팅으로 복귀).</p>
+      <p>· 인플루언서가 응답하면 상세보기에서 <b>실명·연락처·주소</b>를 입력하세요. <b>셋 다 입력해야</b> 다음 단계로 넘어갑니다.</p>
+      <p>· 일반 협찬: [협찬 성사 완료] → 계약서 단계로 진행</p>
+      <p>· 📦 <b>제품만 협찬</b>: 버튼을 켜면 계약서 단계를 건너뛰고 바로 제품 발송으로 갑니다.</p>
+      <h4>■ 드래그로 이동 (빠른 처리)</h4>
+      <p>· 표의 행을 끌어 위쪽 <b>제품 탭/단계 탭</b>에 놓으면 제품·단계가 바뀝니다.</p>
+      <p>· 모바일: 행을 <b>길게 누른 뒤</b> 끌어주세요.</p>
+      <p>· 필수정보(실명·연락처·주소)가 없으면 DM 이후 단계로 이동할 수 없습니다.</p>
+      <h4>■ 제품 발송 단계</h4>
+      <p>상세보기에 실명·연락처·주소가 떠 있으니 [복사] 버튼으로 복사해 택배를 보내고, [제품 발송 완료]를 눌러주세요.</p>
+      <h4>■ 인플루언서 DM 가이드</h4>
+      <p>제품별 대화 가이드 모음입니다. [📋 복사]를 눌러 인스타 DM에 붙여넣어 활용하세요. 가이드 등록·수정은 관리자만 가능합니다.</p>
+      <h4>■ 정산</h4>
+      <p>· DM 발송 1건 = 2,000원 / 협찬 완료 1건 = 20,000원</p>
+      <p>· 월을 선택해 내역을 확인하고 [클립보드 복사]로 보고할 수 있습니다.</p>
+      <p>· [정산 완료 처리]는 관리자 로그인 후 가능하며, 완료일·입금액이 기록되어 모든 기기에서 공유됩니다.</p>
+      <h4>■ 기타</h4>
+      <p>· 거절됨: 거절 처리된 인플루언서 보관함 (상세보기에서 복구 가능)</p>
+      <p>· 🗑 삭제는 복구가 불가능하니 주의하세요.</p>
+    </div>
+    <div class="modal-footer"><button class="btn btn-primary" onclick="closeHelp()">닫기</button></div>
   </div>
 </div>
 
@@ -272,6 +340,7 @@ let selectedIds=new Set();
 let stage2ProductOnly=false;
 let currentProduct='all';
 let settlements={};
+let guides=[],currentGuideProduct='all',editingGuideId=null;
 const uploadedFiles={};
 
 function getNextStageId(s){
@@ -319,6 +388,12 @@ async function api(action,data){
     const res=await fetch(url.toString());return await res.json();
   }catch(e){return{success:false,error:e.message}}
 }
+async function apiPost(action,data){
+  try{
+    const res=await fetch(SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(Object.assign({action},data||{}))});
+    return await res.json();
+  }catch(e){return{success:false,error:e.message}}
+}
 async function uploadToDrive(file,label){
   return new Promise(resolve=>{
     const reader=new FileReader();
@@ -350,12 +425,14 @@ window.onload=()=>{
   setThisMonth();showLoading();initTouchDrag();
   api('getAll').then(r=>{hideLoading();if(r.success){influencers=r.data.filter(d=>d.status!=='deleted');render()}});
   api('getSettlements').then(r=>{if(r.success&&r.data){settlements=r.data;if(document.getElementById('tab-settlement').classList.contains('active'))renderSettlement();}});
+  api('getGuides').then(r=>{if(r.success&&r.data){guides=r.data;if(document.getElementById('tab-guide').classList.contains('active')){renderGuideTabs();renderGuideList();}}else{const el=document.getElementById('guide-list');if(el)el.innerHTML='<div class="empty">가이드를 불러오지 못했습니다. (백엔드 재배포 필요할 수 있음)</div>';}});
 };
 function switchTab(name,btn){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
   document.getElementById('tab-'+name).classList.add('active');btn.classList.add('active');closePanel();
   if(name==='settlement')renderSettlement();
+  if(name==='guide'){renderGuideTabs();renderGuideList();}
 }
 function render(){renderDashboard();renderProductTabs();refreshProductDatalist();renderFilterTabs();renderList()}
 
@@ -1023,6 +1100,87 @@ function cancelSettle(){
     delete settlements[month];renderSettlement();
     syncStart();const r=await api('deleteSettlement',{month});syncEnd();
     if(!r.success){if(prev)settlements[month]=prev;renderSettlement();alert('정산 취소 실패: '+(r.error||''));}
+  });
+}
+function openHelp(){document.getElementById('help-overlay').classList.add('open')}
+function closeHelp(e){if(!e||e.target===document.getElementById('help-overlay'))document.getElementById('help-overlay').classList.remove('open')}
+
+function renderGuideTabs(){
+  const products=getProducts();
+  let html=`<div class="ptab ${currentGuideProduct==='all'?'active':''}" onclick="setGuideProduct('all')">전체 (${guides.length})</div>`;
+  const commonCnt=guides.filter(g=>!String(g.product||'').trim()).length;
+  html+=`<div class="ptab ${currentGuideProduct==='__common__'?'active':''}" onclick="setGuideProduct('__common__')">공통 (${commonCnt})</div>`;
+  products.forEach(p=>{const c=guides.filter(g=>String(g.product||'').trim()===p).length;html+=`<div class="ptab ${currentGuideProduct===p?'active':''}" onclick="setGuideProduct('${escJs(p)}')">${escHtml(p)} (${c})</div>`;});
+  const el=document.getElementById('guide-product-tabs');if(el)el.innerHTML=html;
+}
+function setGuideProduct(p){currentGuideProduct=p;renderGuideTabs();renderGuideList();}
+function renderGuideList(){
+  let list;
+  if(currentGuideProduct==='all')list=guides;
+  else if(currentGuideProduct==='__common__')list=guides.filter(g=>!String(g.product||'').trim());
+  else list=guides.filter(g=>{const p=String(g.product||'').trim();return p===currentGuideProduct||!p});
+  const el=document.getElementById('guide-list');if(!el)return;
+  if(!list.length){el.innerHTML='<div class="empty">등록된 가이드가 없습니다.<br>[+ 가이드 추가]로 대화 가이드를 등록하세요.</div>';return}
+  el.innerHTML=list.map(g=>{
+    const p=String(g.product||'').trim();
+    const _h=p?productColor(p):0;
+    const badge=p?`<span class="prod-badge" style="background:hsl(${_h},45%,17%);color:hsl(${_h},78%,72%);border-color:hsl(${_h},40%,32%)">${escHtml(p)}</span>`:`<span class="prod-badge" style="background:var(--surface3);color:var(--muted);border-color:var(--border)">공통</span>`;
+    return`<div class="guide-card">
+      <div class="guide-head"><b>${escHtml(g.title)}</b>${badge}</div>
+      <pre class="guide-content">${escHtml(g.content)}</pre>
+      <div class="btn-group">
+        <button class="btn btn-primary btn-sm" onclick="copyGuide('${g.id}',event)">📋 복사</button>
+        <button class="btn btn-outline btn-sm" onclick="openGuideModal('${g.id}')">✏️ 수정</button>
+        <button class="btn btn-sm" style="border:1px solid var(--danger);background:none;color:var(--danger)" onclick="removeGuide('${g.id}')">🗑 삭제</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+function copyGuide(id,e){
+  const g=guides.find(x=>String(x.id)===String(id));if(!g)return;
+  navigator.clipboard.writeText(g.content||'').then(()=>{if(e&&e.target){const b=e.target;const o=b.textContent;b.textContent='✓ 복사됨';setTimeout(()=>b.textContent=o,1500)}});
+}
+function openGuideModal(id){
+  requireAdmin(()=>{
+    editingGuideId=id||null;
+    const g=id?guides.find(x=>String(x.id)===String(id)):null;
+    document.getElementById('guide-modal-title').textContent=g?'DM 가이드 수정':'DM 가이드 추가';
+    document.getElementById('guide-product').value=g?(g.product||''):((currentGuideProduct!=='all'&&currentGuideProduct!=='__common__')?currentGuideProduct:'');
+    document.getElementById('guide-title').value=g?(g.title||''):'';
+    document.getElementById('guide-content').value=g?(g.content||''):'';
+    refreshProductDatalist();
+    document.getElementById('guide-overlay').classList.add('open');
+  });
+}
+function closeGuideModal(e){if(!e||e.target===document.getElementById('guide-overlay')){document.getElementById('guide-overlay').classList.remove('open');editingGuideId=null;}}
+async function submitGuide(){
+  const product=document.getElementById('guide-product').value.trim();
+  const title=document.getElementById('guide-title').value.trim();
+  const content=document.getElementById('guide-content').value;
+  if(!title||!content.trim())return alert('제목과 내용을 입력해주세요.');
+  if(product)addProduct(product);
+  if(editingGuideId){
+    const g=guides.find(x=>String(x.id)===String(editingGuideId));if(!g)return;
+    const backup={...g};Object.assign(g,{product,title,content});
+    closeGuideModal();renderGuideTabs();renderGuideList();
+    syncStart();const r=await apiPost('updateGuide',{id:g.id,product,title,content});syncEnd();
+    if(!r.success){Object.assign(g,backup);renderGuideTabs();renderGuideList();alert('저장 실패: '+(r.error||''));}
+  }else{
+    const tempId='temp_'+Date.now();
+    const item={id:tempId,product,title,content};
+    guides.unshift(item);closeGuideModal();renderGuideTabs();renderGuideList();
+    syncStart();const r=await apiPost('addGuide',{product,title,content});syncEnd();
+    if(r.success){item.id=r.id;}
+    else{guides=guides.filter(x=>x.id!==tempId);renderGuideTabs();renderGuideList();alert('추가 실패: '+(r.error||''));}
+  }
+}
+function removeGuide(id){
+  requireAdmin(async()=>{
+    if(!confirm('이 가이드를 삭제할까요?'))return;
+    const idx=guides.findIndex(x=>String(x.id)===String(id));if(idx<0)return;
+    const backup=guides[idx];guides.splice(idx,1);renderGuideTabs();renderGuideList();
+    syncStart();const r=await apiPost('deleteGuide',{id});syncEnd();
+    if(!r.success){guides.splice(idx,0,backup);renderGuideTabs();renderGuideList();alert('삭제 실패: '+(r.error||''));}
   });
 }
 function copySettlement(){
