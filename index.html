@@ -160,7 +160,7 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <button onclick="switchTab('settlement',this)">정산</button>
     </nav>
     <button class="btn btn-outline btn-sm" style="margin-left:auto;white-space:nowrap" onclick="openHelp()">📖 프로그램 사용법</button>
-    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.6</button>
+    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.7</button>
     <span id="sync-badge">동기화 중...</span>
   </header>
 
@@ -168,11 +168,11 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
     <div id="stage-cards"></div>
     <div class="todo-grid">
       <div class="todo-box">
-        <h3><span style="color:#e74c3c">🔴</span> 내 할 일</h3>
+        <h3><span style="color:#e74c3c">🔴</span> 관리자 할 일</h3>
         <div id="boss-todo"></div>
       </div>
       <div class="todo-box">
-        <h3><span style="color:#ffc107">🟡</span> 아르바이트 할 일</h3>
+        <h3><span style="color:#ffc107">🟡</span> 매니저 할 일</h3>
         <div id="part-todo"></div>
       </div>
     </div>
@@ -252,7 +252,7 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
     <h3 id="guide-modal-title">DM 가이드 추가</h3>
     <div class="fg"><label>적용 제품 (비워두면 공통 — 모든 제품에 표시)</label><input type="text" id="guide-product" list="product-datalist" placeholder="제품명 입력 또는 선택"></div>
     <div class="fg"><label>제목</label><input type="text" id="guide-title" placeholder="예: 첫 DM 인사말"></div>
-    <div class="fg"><label>내용 (아르바이트가 복사해 갈 대화문)</label><textarea id="guide-content" style="min-height:160px" placeholder="안녕하세요! ..."></textarea></div>
+    <div class="fg"><label>내용 (매니저가 복사해 갈 대화문)</label><textarea id="guide-content" style="min-height:160px" placeholder="안녕하세요! ..."></textarea></div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeGuideModal()">취소</button>
       <button class="btn btn-primary" onclick="submitGuide()">저장</button>
@@ -267,8 +267,8 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <h4>■ 전체 진행 흐름</h4>
       <p>리스팅 목록 → DM 발송 완료/진행 대기 → 계약서발송/수집 → 제품 발송 → 광고 코드/입금정보 수집 → 광고세팅/입금 → 완료</p>
       <h4>■ 역할 구분</h4>
-      <p>🟡 <b>아르바이트</b>: 리스팅, DM 발송, 제품 발송, 광고 코드/입금정보 수집</p>
-      <p>🔴 <b>사장</b>: 계약서발송/수집, 광고세팅/입금, 정산 완료 처리</p>
+      <p>🟡 <b>매니저</b>: 리스팅, DM 발송, 제품 발송, 광고 코드/입금정보 수집</p>
+      <p>🔴 <b>관리자</b>: 계약서발송/수집, 광고세팅/입금, 정산 완료 처리</p>
       <h4>■ 인플루언서 추가</h4>
       <p>1) [인플루언서 관리] 상단에서 <b>제품 탭</b>을 먼저 선택하세요 (없으면 [+ 제품 추가]).</p>
       <p>2) [+ 추가] 버튼 → 인스타그램 URL을 붙여넣으면 계정명·릴스 주소가 자동 입력됩니다.</p>
@@ -457,8 +457,8 @@ function renderDashboard(){
   const bossCards=STAGES.filter(s=>getStageRole(s.id)==='boss').map(cardHtml).join('');
   const rejCard=`<div class="card" style="border-top:3px solid #6c757d" onclick="jumpToFilter('rejected')"><div class="card-count" style="color:#9aa0a6">${rejected.length}</div><div class="card-label">거절됨</div></div>`;
   document.getElementById('stage-cards').innerHTML=
-    `<div class="role-section"><div class="role-header part">🟡 아르바이트 담당</div><div class="cards">${partCards}</div></div>`+
-    `<div class="role-section"><div class="role-header boss">🔴 사장 담당</div><div class="cards">${bossCards}</div></div>`+
+    `<div class="role-section"><div class="role-header part">🟡 매니저 담당</div><div class="cards">${partCards}</div></div>`+
+    `<div class="role-section"><div class="role-header boss">🔴 관리자 담당</div><div class="cards">${bossCards}</div></div>`+
     `<div class="role-section"><div class="role-header" style="color:var(--muted)">기타</div><div class="cards">${rejCard}</div></div>`;
 
   const todoItemHtml=i=>{const s=getStageInfo(i.stage);const canAdv=getNextStageId(Number(i.stage))!==null;return`<div class="todo-item" onclick="openDetail('${i.id}')"><span class="todo-name">@${i.instagram_id||i.nickname}</span><div class="todo-right"><span class="todo-stage" style="background:${s.color}22;color:${s.color}">${s.name}</span>${canAdv?`<button class="btn btn-outline btn-sm" onclick="quickAdvance('${i.id}',event)" style="padding:2px 7px">→</button>`:''}</div></div>`};
@@ -1115,14 +1115,15 @@ function cancelSettle(){
 function openHelp(){document.getElementById('help-overlay').classList.add('open')}
 function closeHelp(e){if(!e||e.target===document.getElementById('help-overlay'))document.getElementById('help-overlay').classList.remove('open')}
 
-const APP_VERSION='v2.6';
+const APP_VERSION='v2.7';
 const CHANGELOG=[
+  {v:'v2.7',d:'2026-06-05',items:['역할 명칭 변경 — 아르바이트 → 매니저, 사장 → 관리자']},
   {v:'v2.6',d:'2026-06-05',items:['우측 상단 버전 표시·업데이트 내역 보기 추가']},
   {v:'v2.5',d:'2026-06-05',items:['📖 프로그램 사용법 안내 추가','인플루언서 DM 가이드 탭 신설 — 제품별 분류, 원클릭 복사, 관리자 등록(모든 기기 공유)']},
   {v:'v2.4',d:'2026-06-05',items:['정산 완료 처리(관리자 로그인) — 완료일·입금액 기록','정산 기록 백엔드 저장(모든 기기 공유)']},
   {v:'v2.3',d:'2026-06-02',items:['행 드래그로 단계·제품 이동(PC), 모바일은 길게 눌러 드래그','필수정보(실명·연락처·주소) 없으면 이동 차단','행에 제품 배지 표시(제품별 고유 색)']},
   {v:'v2.2',d:'2026-06-02',items:['협찬 제품 분류 — 제품 탭, 인플루언서 추가 시 제품 지정, 미지정 관리']},
-  {v:'v2.1',d:'2026-06-02',items:['제품 발송 단계 신설 — 실명·연락처·주소 원클릭 복사','단계명 정리(광고 코드/입금정보 수집)','사장/아르바이트 담당 시각적 분리(대시보드·필터 탭)']},
+  {v:'v2.1',d:'2026-06-02',items:['제품 발송 단계 신설 — 실명·연락처·주소 원클릭 복사','단계명 정리(광고 코드/입금정보 수집)','관리자/매니저 담당 시각적 분리(대시보드·필터 탭)']},
   {v:'v2.0',d:'2026-06-02',items:['DM 단계 개편 — 실명·연락처·주소 수집 필수','협찬 성사 완료 / 📦 제품만 협찬(계약서 단계 건너뛰기)','DM 버튼 재클릭 시 리스팅 목록 복귀','백엔드 저장 구조 정비(누락 컬럼 자동 생성, 추가 밀림 버그 수정)']},
   {v:'v1.1',d:'2026-06-02',items:['DM발송·협찬성사 토글 및 수당 컬럼, 릴스 링크, 거절됨 처리']},
   {v:'v1.0',d:'2026-06-01',items:['최초 배포 — 인플루언서 관리, 단계 진행, 정산, 파일 업로드, Optimistic UI']},
