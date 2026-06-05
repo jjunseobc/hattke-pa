@@ -160,6 +160,7 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <button onclick="switchTab('settlement',this)">정산</button>
     </nav>
     <button class="btn btn-outline btn-sm" style="margin-left:auto;white-space:nowrap" onclick="openHelp()">📖 프로그램 사용법</button>
+    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.6</button>
     <span id="sync-badge">동기화 중...</span>
   </header>
 
@@ -296,6 +297,14 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
   </div>
 </div>
 
+<div class="overlay" id="changelog-overlay" onclick="closeChangelog(event)">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:520px">
+    <h3>🗒 업데이트 내역</h3>
+    <div class="help-body" id="changelog-body"></div>
+    <div class="modal-footer"><button class="btn btn-primary" onclick="closeChangelog()">닫기</button></div>
+  </div>
+</div>
+
 <div class="overlay" id="add-overlay" onclick="closeAddModal(event)">
   <div class="modal" onclick="event.stopPropagation()">
     <h3>인플루언서 추가</h3>
@@ -423,6 +432,7 @@ function localAdd(item){influencers.unshift(item)}
 window.onload=()=>{
   document.getElementById('add-recruited-date').value=new Date().toISOString().split('T')[0];
   setThisMonth();showLoading();initTouchDrag();
+  const vb=document.getElementById('version-btn');if(vb)vb.textContent=APP_VERSION;
   api('getAll').then(r=>{hideLoading();if(r.success){influencers=r.data.filter(d=>d.status!=='deleted');render()}});
   api('getSettlements').then(r=>{if(r.success&&r.data){settlements=r.data;if(document.getElementById('tab-settlement').classList.contains('active'))renderSettlement();}});
   api('getGuides').then(r=>{if(r.success&&r.data){guides=r.data;if(document.getElementById('tab-guide').classList.contains('active')){renderGuideTabs();renderGuideList();}}else{const el=document.getElementById('guide-list');if(el)el.innerHTML='<div class="empty">가이드를 불러오지 못했습니다. (백엔드 재배포 필요할 수 있음)</div>';}});
@@ -1104,6 +1114,25 @@ function cancelSettle(){
 }
 function openHelp(){document.getElementById('help-overlay').classList.add('open')}
 function closeHelp(e){if(!e||e.target===document.getElementById('help-overlay'))document.getElementById('help-overlay').classList.remove('open')}
+
+const APP_VERSION='v2.6';
+const CHANGELOG=[
+  {v:'v2.6',d:'2026-06-05',items:['우측 상단 버전 표시·업데이트 내역 보기 추가']},
+  {v:'v2.5',d:'2026-06-05',items:['📖 프로그램 사용법 안내 추가','인플루언서 DM 가이드 탭 신설 — 제품별 분류, 원클릭 복사, 관리자 등록(모든 기기 공유)']},
+  {v:'v2.4',d:'2026-06-05',items:['정산 완료 처리(관리자 로그인) — 완료일·입금액 기록','정산 기록 백엔드 저장(모든 기기 공유)']},
+  {v:'v2.3',d:'2026-06-02',items:['행 드래그로 단계·제품 이동(PC), 모바일은 길게 눌러 드래그','필수정보(실명·연락처·주소) 없으면 이동 차단','행에 제품 배지 표시(제품별 고유 색)']},
+  {v:'v2.2',d:'2026-06-02',items:['협찬 제품 분류 — 제품 탭, 인플루언서 추가 시 제품 지정, 미지정 관리']},
+  {v:'v2.1',d:'2026-06-02',items:['제품 발송 단계 신설 — 실명·연락처·주소 원클릭 복사','단계명 정리(광고 코드/입금정보 수집)','사장/아르바이트 담당 시각적 분리(대시보드·필터 탭)']},
+  {v:'v2.0',d:'2026-06-02',items:['DM 단계 개편 — 실명·연락처·주소 수집 필수','협찬 성사 완료 / 📦 제품만 협찬(계약서 단계 건너뛰기)','DM 버튼 재클릭 시 리스팅 목록 복귀','백엔드 저장 구조 정비(누락 컬럼 자동 생성, 추가 밀림 버그 수정)']},
+  {v:'v1.1',d:'2026-06-02',items:['DM발송·협찬성사 토글 및 수당 컬럼, 릴스 링크, 거절됨 처리']},
+  {v:'v1.0',d:'2026-06-01',items:['최초 배포 — 인플루언서 관리, 단계 진행, 정산, 파일 업로드, Optimistic UI']},
+];
+function openChangelog(){
+  const body=document.getElementById('changelog-body');
+  body.innerHTML=CHANGELOG.map(c=>`<h4>${c.v} <span class="tl-date">${c.d}</span></h4>${c.items.map(i=>`<p>· ${i}</p>`).join('')}`).join('');
+  document.getElementById('changelog-overlay').classList.add('open');
+}
+function closeChangelog(e){if(!e||e.target===document.getElementById('changelog-overlay'))document.getElementById('changelog-overlay').classList.remove('open')}
 
 function renderGuideTabs(){
   const products=getProducts();
