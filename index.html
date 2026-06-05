@@ -176,7 +176,7 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <button onclick="switchTab('settlement',this)">정산</button>
     </nav>
     <button class="btn btn-outline btn-sm" style="margin-left:auto;white-space:nowrap" onclick="openHelp()">📖 프로그램 사용법</button>
-    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.12</button>
+    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.13</button>
     <span id="sync-badge">동기화 중...</span>
   </header>
 
@@ -284,8 +284,8 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <h4>■ 전체 진행 흐름</h4>
       <p>리스팅 목록 → DM 발송 완료/진행 대기 → 계약서발송/수집 → 제품 발송 → 광고 코드/입금정보 수집 → 광고세팅/입금 → 완료</p>
       <h4>■ 역할 구분</h4>
-      <p>🟡 <b>매니저</b>: 리스팅, DM 발송, 제품 발송, 광고 코드/입금정보 수집</p>
-      <p>🔴 <b>관리자</b>: 계약서발송/수집, 광고세팅/입금, 정산 완료 처리</p>
+      <p>🟡 <b>매니저</b>: 리스팅, DM 발송, 광고 코드/입금정보 수집</p>
+      <p>🔴 <b>관리자</b>: 계약서발송/수집, 제품 발송, 광고세팅/입금, 정산 완료 처리</p>
       <h4>■ 인플루언서 추가</h4>
       <p>1) [인플루언서 관리] 상단에서 <b>제품 탭</b>을 먼저 선택하세요 (없으면 [+ 제품 추가]).</p>
       <p>2) [+ 추가] 버튼 → 인스타그램 URL을 붙여넣으면 계정명·릴스 주소가 자동 입력됩니다.</p>
@@ -387,7 +387,7 @@ function getStageInfo(stageId){
   const d=s===1?0:s;
   return STAGES.find(st=>st.id===d)||{name:'알 수 없음',color:'#888'};
 }
-function getStageRole(stageId){const s=Number(stageId);return (s===4||s===7)?'boss':'part';}
+function getStageRole(stageId){const s=Number(stageId);return (s===4||s===6||s===7)?'boss':'part';}
 function formatDate(d){
   if(!d)return'-';
   const s=String(d).trim();
@@ -481,9 +481,9 @@ function renderDashboard(){
 
   const todoItemHtml=i=>{const s=getStageInfo(i.stage);const canAdv=getNextStageId(Number(i.stage))!==null;return`<div class="todo-item" onclick="openDetail('${i.id}')"><span class="todo-name">@${i.instagram_id||i.nickname}</span><div class="todo-right"><span class="todo-stage" style="background:${s.color}22;color:${s.color}">${s.name}</span>${canAdv?`<button class="btn btn-outline btn-sm" onclick="quickAdvance('${i.id}',event)" style="padding:2px 7px">→</button>`:''}</div></div>`};
   const emptyTodo='<div class="text-muted" style="padding:6px 0">할 일 없음 ✓</div>';
-  const bossItems=active.filter(i=>{const s=Number(i.stage);return s===4||s===7});
+  const bossItems=active.filter(i=>{const s=Number(i.stage);return s===4||s===6||s===7});
   document.getElementById('boss-todo').innerHTML=bossItems.length===0?emptyTodo:bossItems.map(todoItemHtml).join('');
-  const partItems=active.filter(i=>{const s=Number(i.stage);return s===0||s===1||s===2||s===5||s===6});
+  const partItems=active.filter(i=>{const s=Number(i.stage);return s===0||s===1||s===2||s===5});
   document.getElementById('part-todo').innerHTML=partItems.length===0?emptyTodo:partItems.map(todoItemHtml).join('');
 }
 
@@ -1164,8 +1164,9 @@ function cancelSettle(){
 function openHelp(){document.getElementById('help-overlay').classList.add('open')}
 function closeHelp(e){if(!e||e.target===document.getElementById('help-overlay'))document.getElementById('help-overlay').classList.remove('open')}
 
-const APP_VERSION='v2.12';
+const APP_VERSION='v2.13';
 const CHANGELOG=[
+  {v:'v2.13',d:'2026-06-05',items:['제품 발송 단계를 관리자 담당으로 변경']},
   {v:'v2.12',d:'2026-06-05',items:['신규 항목 저장 중(1~2초) 조작 시 발생하던 [저장 실패: Not found] 오류를 안내 메시지로 개선(저장 중 보호)']},
   {v:'v2.11',d:'2026-06-05',items:['단계 필터 재배치 — 전체(좌)/진행단계(중앙)/거절됨·완료됨(우)','전체·거절됨·완료됨 탭을 이모지 대신 버튼 색상으로 구분']},
   {v:'v2.10',d:'2026-06-05',items:['제품 탭 전체 버튼 색상 구분(보라), 미지정 탭 제거','인플루언서 추가 시 협찬 제품 선택 필수화','단계 필터 전체🔵/거절됨❌/완료됨✅ 표시','대시보드에서 거절됨 카드 제거']},
