@@ -126,6 +126,8 @@ input[type=file]{background:var(--surface2);border:1px dashed var(--border);colo
 .ptab.active{background:var(--primary);border-color:var(--primary);color:#fff}
 .ptab:hover:not(.active){border-color:#555}
 .ptab-add{color:var(--primary);border-style:dashed}
+.ptab-all{border-color:#8b5cf6;color:#c4b5fd;background:#221a35}
+.ptab-all.active{background:#8b5cf6;border-color:#8b5cf6;color:#fff}
 .settle-del{background:none;border:1px solid var(--border);color:var(--muted);border-radius:4px;font-size:10px;padding:1px 5px;cursor:pointer;margin-left:6px;vertical-align:middle}
 .settle-del:hover{border-color:var(--danger);color:var(--danger)}
 .guide-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px}
@@ -162,7 +164,7 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <button onclick="switchTab('settlement',this)">정산</button>
     </nav>
     <button class="btn btn-outline btn-sm" style="margin-left:auto;white-space:nowrap" onclick="openHelp()">📖 프로그램 사용법</button>
-    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.9</button>
+    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.10</button>
     <span id="sync-badge">동기화 중...</span>
   </header>
 
@@ -451,18 +453,15 @@ function render(){renderDashboard();renderProductTabs();refreshProductDatalist()
 
 function renderDashboard(){
   const active=influencers.filter(i=>i.status==='active');
-  const rejected=influencers.filter(i=>i.status==='rejected');
   const cardHtml=s=>{
     const count=s.id===0?active.filter(i=>Number(i.stage)===0||Number(i.stage)===1).length:active.filter(i=>Number(i.stage)===s.id).length;
     return`<div class="card" style="border-top:3px solid ${s.color}" onclick="jumpToFilter(${s.id})"><div class="card-count" style="color:${s.color}">${count}</div><div class="card-label">${s.name}</div></div>`;
   };
   const partCards=STAGES.filter(s=>getStageRole(s.id)==='part').map(cardHtml).join('');
   const bossCards=STAGES.filter(s=>getStageRole(s.id)==='boss').map(cardHtml).join('');
-  const rejCard=`<div class="card" style="border-top:3px solid #6c757d" onclick="jumpToFilter('rejected')"><div class="card-count" style="color:#9aa0a6">${rejected.length}</div><div class="card-label">거절됨</div></div>`;
   document.getElementById('stage-cards').innerHTML=
     `<div class="role-section"><div class="role-header part">🟡 매니저 담당</div><div class="cards">${partCards}</div></div>`+
-    `<div class="role-section"><div class="role-header boss">🔴 관리자 담당</div><div class="cards">${bossCards}</div></div>`+
-    `<div class="role-section"><div class="role-header" style="color:var(--muted)">기타</div><div class="cards">${rejCard}</div></div>`;
+    `<div class="role-section"><div class="role-header boss">🔴 관리자 담당</div><div class="cards">${bossCards}</div></div>`;
 
   const todoItemHtml=i=>{const s=getStageInfo(i.stage);const canAdv=getNextStageId(Number(i.stage))!==null;return`<div class="todo-item" onclick="openDetail('${i.id}')"><span class="todo-name">@${i.instagram_id||i.nickname}</span><div class="todo-right"><span class="todo-stage" style="background:${s.color}22;color:${s.color}">${s.name}</span>${canAdv?`<button class="btn btn-outline btn-sm" onclick="quickAdvance('${i.id}',event)" style="padding:2px 7px">→</button>`:''}</div></div>`};
   const emptyTodo='<div class="text-muted" style="padding:6px 0">할 일 없음 ✓</div>';
@@ -494,11 +493,11 @@ function refreshProductDatalist(){
   if(dl)dl.innerHTML=getProducts().map(p=>`<option value="${escHtml(p)}"></option>`).join('');
 }
 function renderProductTabs(){
+  if(currentProduct==='__none__')currentProduct='all';
   const products=getProducts();
   const cnt=pred=>influencers.filter(i=>i.status!=='deleted'&&pred(i)).length;
-  let html=`<div class="ptab ${currentProduct==='all'?'active':''}" onclick="setProduct('all')">전체 (${cnt(()=>true)})</div>`;
+  let html=`<div class="ptab ptab-all ${currentProduct==='all'?'active':''}" onclick="setProduct('all')">전체 (${cnt(()=>true)})</div>`;
   products.forEach(p=>{html+=`<div class="ptab ${currentProduct===p?'active':''}" onclick="setProduct('${escJs(p)}')" data-drop="product" data-product="${escHtml(p)}" ondragover="onTabDragOver(event)" ondragleave="onTabDragLeave(event)" ondrop="onPtabDrop(event,'${escJs(p)}')">${escHtml(p)} (${cnt(i=>String(i.product||'').trim()===p)})</div>`;});
-  html+=`<div class="ptab ${currentProduct==='__none__'?'active':''}" onclick="setProduct('__none__')" data-drop="none" ondragover="onTabDragOver(event)" ondragleave="onTabDragLeave(event)" ondrop="onPtabDrop(event,'__none__')">미지정 (${cnt(i=>!String(i.product||'').trim())})</div>`;
   html+=`<div class="ptab ptab-add" onclick="promptAddProduct()">+ 제품 추가</div>`;
   const el=document.getElementById('product-tabs');if(el)el.innerHTML=html;
 }
@@ -512,15 +511,15 @@ function promptAddProduct(){
 }
 function renderFilterTabs(){
   const active=influencers.filter(i=>i.status==='active'&&productMatch(i));
-  let html=`<div class="filter-tab ${currentFilter==='all'?'active':''}" onclick="setFilter('all')">전체 (${active.length})</div>`;
+  let html=`<div class="filter-tab ${currentFilter==='all'?'active':''}" onclick="setFilter('all')">🔵 전체 (${active.length})</div>`;
   STAGES.forEach(s=>{
     const count=s.id===0?active.filter(i=>Number(i.stage)===0||Number(i.stage)===1).length:active.filter(i=>Number(i.stage)===s.id).length;
     html+=`<div class="filter-tab ${currentFilter===s.id?'active':''}" onclick="setFilter(${s.id})" data-drop="stage" data-stage="${s.id}" ondragover="onTabDragOver(event)" ondragleave="onTabDragLeave(event)" ondrop="onTabDrop(event,${s.id})">${getStageRole(s.id)==='boss'?'🔴':'🟡'} ${s.name} (${count})</div>`;
   });
   const rejCount=influencers.filter(i=>i.status==='rejected'&&productMatch(i)).length;
-  html+=`<div class="filter-tab ${currentFilter==='rejected'?'active':''}" onclick="setFilter('rejected')" data-drop="reject" ondragover="onTabDragOver(event)" ondragleave="onTabDragLeave(event)" ondrop="onTabDrop(event,'rejected')">거절됨 (${rejCount})</div>`;
+  html+=`<div class="filter-tab ${currentFilter==='rejected'?'active':''}" onclick="setFilter('rejected')" data-drop="reject" ondragover="onTabDragOver(event)" ondragleave="onTabDragLeave(event)" ondrop="onTabDrop(event,'rejected')">❌ 거절됨 (${rejCount})</div>`;
   const doneCount=influencers.filter(i=>i.status==='done'&&productMatch(i)).length;
-  html+=`<div class="filter-tab ${currentFilter==='done'?'active':''}" onclick="setFilter('done')">완료됨 (${doneCount})</div>`;
+  html+=`<div class="filter-tab ${currentFilter==='done'?'active':''}" onclick="setFilter('done')">✅ 완료됨 (${doneCount})</div>`;
   document.getElementById('filter-tabs').innerHTML=html;
 }
 function setFilter(f){currentFilter=f;renderFilterTabs();renderList()}
@@ -793,6 +792,8 @@ function openAddModal(){
 function closeAddModal(e){if(!e||e.target===document.getElementById('add-overlay'))document.getElementById('add-overlay').classList.remove('open')}
 function parseUrl(){const m=document.getElementById('insta-url').value.trim().match(/instagram\.com\/([^\/\?]+)/);if(m){const u=m[1];document.getElementById('add-instagram-id').value=u;document.getElementById('add-reels-url').value=`https://www.instagram.com/${u}/reels/`}}
 async function submitAdd(){
+  const addProductVal=document.getElementById('add-product').value.trim();
+  if(!addProductVal)return alert('협찬 제품을 먼저 선택(입력)해주세요.');
   const instagram_id=document.getElementById('add-instagram-id').value.trim();
   if(!instagram_id)return alert('URL을 먼저 입력해주세요.');
   const tempId='temp_'+Date.now();
@@ -1142,8 +1143,9 @@ function cancelSettle(){
 function openHelp(){document.getElementById('help-overlay').classList.add('open')}
 function closeHelp(e){if(!e||e.target===document.getElementById('help-overlay'))document.getElementById('help-overlay').classList.remove('open')}
 
-const APP_VERSION='v2.9';
+const APP_VERSION='v2.10';
 const CHANGELOG=[
+  {v:'v2.10',d:'2026-06-05',items:['제품 탭 전체 버튼 색상 구분(보라), 미지정 탭 제거','인플루언서 추가 시 협찬 제품 선택 필수화','단계 필터 전체🔵/거절됨❌/완료됨✅ 표시','대시보드에서 거절됨 카드 제거']},
   {v:'v2.9',d:'2026-06-05',items:['협찬 성사는 광고 코드/입금정보 수집 완료 후에만 표시 가능','광고 코드/입금정보 수집 완료 시 협찬 성사 자동 표시(이전 단계로 되돌리면 해제)','정산 내역 옆 ✕ 버튼으로 개별 내역 수동 삭제']},
   {v:'v2.8',d:'2026-06-05',items:['선택 항목 일괄 삭제 기능 추가','상태값이 비정상인 행이 카운트에 잡히던 문제 수정']},
   {v:'v2.7',d:'2026-06-05',items:['역할 명칭 변경 — 아르바이트 → 매니저, 사장 → 관리자']},
@@ -1166,7 +1168,7 @@ function closeChangelog(e){if(!e||e.target===document.getElementById('changelog-
 
 function renderGuideTabs(){
   const products=getProducts();
-  let html=`<div class="ptab ${currentGuideProduct==='all'?'active':''}" onclick="setGuideProduct('all')">전체 (${guides.length})</div>`;
+  let html=`<div class="ptab ptab-all ${currentGuideProduct==='all'?'active':''}" onclick="setGuideProduct('all')">전체 (${guides.length})</div>`;
   const commonCnt=guides.filter(g=>!String(g.product||'').trim()).length;
   html+=`<div class="ptab ${currentGuideProduct==='__common__'?'active':''}" onclick="setGuideProduct('__common__')">공통 (${commonCnt})</div>`;
   products.forEach(p=>{const c=guides.filter(g=>String(g.product||'').trim()===p).length;html+=`<div class="ptab ${currentGuideProduct===p?'active':''}" onclick="setGuideProduct('${escJs(p)}')">${escHtml(p)} (${c})</div>`;});
