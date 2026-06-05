@@ -126,6 +126,8 @@ input[type=file]{background:var(--surface2);border:1px dashed var(--border);colo
 .ptab.active{background:var(--primary);border-color:var(--primary);color:#fff}
 .ptab:hover:not(.active){border-color:#555}
 .ptab-add{color:var(--primary);border-style:dashed}
+.settle-del{background:none;border:1px solid var(--border);color:var(--muted);border-radius:4px;font-size:10px;padding:1px 5px;cursor:pointer;margin-left:6px;vertical-align:middle}
+.settle-del:hover{border-color:var(--danger);color:var(--danger)}
 .guide-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px}
 .guide-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
 .guide-content{white-space:pre-wrap;word-break:break-word;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:13px;font-family:inherit;margin:0 0 10px;max-height:260px;overflow-y:auto}
@@ -160,7 +162,7 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <button onclick="switchTab('settlement',this)">정산</button>
     </nav>
     <button class="btn btn-outline btn-sm" style="margin-left:auto;white-space:nowrap" onclick="openHelp()">📖 프로그램 사용법</button>
-    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.8</button>
+    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.9</button>
     <span id="sync-badge">동기화 중...</span>
   </header>
 
@@ -628,6 +630,7 @@ async function dropToStage(id,target){
   if(inf.status!=='active')changes.status='active';
   if(targetIdx>=1){changes.dm_sent='Y';changes.dm_sent_date=inf.dm_sent_date||new Date().toISOString().split('T')[0];}
   if(targetStage===0){changes.dm_sent='N';changes.dm_sent_date='';}
+  changes.sponsorship_done=(targetStage===7)?'Y':'N';
   const backup={...inf};
   localUpdate(id,changes);render();if(String(selectedId)===String(id))renderPanel();
   syncStart();const r=await api('update',Object.assign({id},changes));syncEnd();
@@ -679,7 +682,9 @@ function renderList(){
       <td><span class="stage-badge" style="background:${si.color}22;color:${si.color}">${si.name}</span></td>
       <td onclick="event.stopPropagation()" style="text-align:center">${dmBtn}</td>
       <td onclick="event.stopPropagation()" style="text-align:center">
-        <button class="btn btn-sm" style="min-width:32px;background:${spY?'var(--success)':'var(--surface3)'};color:${spY?'#fff':'var(--muted)'};border:1px solid ${spY?'var(--success)':'var(--border)'}" onclick="toggleSponsorship('${i.id}',event)">${spY?'Y':'N'}</button>
+        ${(i.status==='done'||Number(i.stage)===7||Number(i.stage)===8)
+          ?`<button class="btn btn-sm" style="min-width:32px;background:${spY?'var(--success)':'var(--surface3)'};color:${spY?'#fff':'var(--muted)'};border:1px solid ${spY?'var(--success)':'var(--border)'}" onclick="toggleSponsorship('${i.id}',event)">${spY?'Y':'N'}</button>`
+          :`<span class="btn btn-sm" title="광고 코드/입금정보 수집 단계 완료 후 자동 표시됩니다" style="min-width:32px;background:var(--surface3);color:var(--muted);border:1px solid var(--border);cursor:default;opacity:.45">${spY?'Y':'N'}</span>`}
       </td>
       <td style="text-align:right;color:${dmY?'#ffc107':'var(--muted)'};font-size:12px">${dmY?'2,000원':'-'}</td>
       <td style="text-align:right;color:${spY?'#4f8ef7':'var(--muted)'};font-size:12px">${spY?'20,000원':'-'}</td>
@@ -722,6 +727,7 @@ async function dmRevert(id,e){
 async function toggleSponsorship(id,e){
   e.stopPropagation();
   const inf=localGet(id);if(!inf)return;
+  if(!(inf.status==='done'||Number(inf.stage)===7||Number(inf.stage)===8)){alert('협찬 성사는 광고 코드/입금정보 수집 단계를 완료한 후 표시할 수 있습니다.');return}
   const prev=inf.sponsorship_done;const next=prev==='Y'?'N':'Y';
   localUpdate(id,{sponsorship_done:next});renderList();
   syncStart();const r=await api('update',{id,sponsorship_done:next});syncEnd();
@@ -735,9 +741,9 @@ function clearSelection(){selectedIds.clear();updateBulkBar();renderList()}
 async function bulkAdvance(){
   const ids=[...selectedIds];
   let blocked=0;const advanced=[];
-  ids.forEach(id=>{const inf=localGet(id);if(!inf||inf.status!=='active')return;if(needsContactInfo(inf)){blocked++;return}const next=getNextStageId(Number(inf.stage));if(next!==null){localUpdate(id,{stage:next});advanced.push(id)}});
+  ids.forEach(id=>{const inf=localGet(id);if(!inf||inf.status!=='active')return;if(needsContactInfo(inf)){blocked++;return}const next=getNextStageId(Number(inf.stage));if(next!==null){const ch=next===7?{stage:next,sponsorship_done:'Y'}:{stage:next};localUpdate(id,ch);advanced.push({id,ch})}});
   selectedIds.clear();updateBulkBar();render();
-  syncStart();await Promise.all(advanced.map(id=>{const inf=localGet(id);return inf?api('update',{id,stage:inf.stage}):Promise.resolve({success:true})}));syncEnd();
+  syncStart();await Promise.all(advanced.map(a=>api('update',Object.assign({id:a.id},a.ch))));syncEnd();
   if(blocked>0)alert(blocked+'명은 실명·연락처가 없어 DM 발송 단계에 그대로 두었습니다. 개별로 입력 후 진행해주세요.');
 }
 async function bulkReject(){
@@ -770,9 +776,11 @@ async function quickAdvance(id,e){
   const inf=localGet(id);if(!inf||inf.status!=='active')return;
   if(needsContactInfo(inf)){alert('실명과 연락처를 입력해야 계약서 발송(다음 단계)으로 넘어갈 수 있습니다.');openDetail(id);return}
   const next=getNextStageId(Number(inf.stage));if(next===null)return;
-  const prev=Number(inf.stage);localUpdate(id,{stage:next});render();if(String(selectedId)===String(id))renderPanel();
-  syncStart();const r=await api('update',{id,stage:next});syncEnd();
-  if(!r.success){localUpdate(id,{stage:prev});render();alert('저장 실패: '+r.error)}
+  const backup={...inf};
+  const ch=next===7?{stage:next,sponsorship_done:'Y'}:{stage:next};
+  localUpdate(id,ch);render();if(String(selectedId)===String(id))renderPanel();
+  syncStart();const r=await api('update',Object.assign({id},ch));syncEnd();
+  if(!r.success){localUpdate(id,backup);render();alert('저장 실패: '+r.error)}
 }
 
 function openAddModal(){
@@ -1013,8 +1021,8 @@ async function completeProduct(){
   const inf=localGet(selectedId);const next=getNextStageId(Number(inf.stage));
   let bankbook_file=inf.bankbook_file||'',id_file=inf.id_file||'';
   if(product_only==='N'){if(uploadedFiles['p-bankbook-file'])bankbook_file=uploadedFiles['p-bankbook-file'];if(uploadedFiles['p-id-file'])id_file=uploadedFiles['p-id-file'];}
-  const backup={...inf};localUpdate(selectedId,{stage:next,product_sent_date:product_date,ad_code,bankbook_file,id_file,product_only});render();renderPanel();
-  syncStart();const r=await api('update',{id:selectedId,stage:next,product_sent_date:product_date,ad_code,bankbook_file,id_file,product_only});syncEnd();
+  const backup={...inf};localUpdate(selectedId,{stage:next,product_sent_date:product_date,ad_code,bankbook_file,id_file,product_only,sponsorship_done:'Y'});render();renderPanel();
+  syncStart();const r=await api('update',{id:selectedId,stage:next,product_sent_date:product_date,ad_code,bankbook_file,id_file,product_only,sponsorship_done:'Y'});syncEnd();
   delete uploadedFiles['p-bankbook-file'];delete uploadedFiles['p-id-file'];
   if(!r.success){localUpdate(selectedId,backup);render();renderPanel();alert('저장 실패')}
 }
@@ -1058,7 +1066,7 @@ function renderSettlement(){
   const allItems=allIds.map(id=>influencers.find(i=>i.id===id)).filter(Boolean);
   const tbody=document.getElementById('settlement-table');
   if(!allItems.length){tbody.innerHTML=`<tr><td colspan="6"><div class="empty">해당 월 내역 없음</div></td></tr>`;return}
-  tbody.innerHTML=allItems.map(i=>{const hDM=i.dm_sent_date&&formatDate(i.dm_sent_date).startsWith(month);const hDone=i.status==='done'&&i.payment_date&&formatDate(i.payment_date).startsWith(month);return`<tr><td>@${i.instagram_id||i.nickname}</td><td>${i.name||'-'}</td><td>${hDM?formatDate(i.dm_sent_date):'-'}</td><td>${hDone?formatDate(i.payment_date):'-'}</td><td>${hDM?'2,000원':'-'}</td><td>${hDone?'20,000원':'-'}</td></tr>`}).join('');
+  tbody.innerHTML=allItems.map(i=>{const hDM=i.dm_sent_date&&formatDate(i.dm_sent_date).startsWith(month);const hDone=i.status==='done'&&i.payment_date&&formatDate(i.payment_date).startsWith(month);return`<tr><td>@${i.instagram_id||i.nickname}</td><td>${i.name||'-'}</td><td>${hDM?formatDate(i.dm_sent_date):'-'}</td><td>${hDone?formatDate(i.payment_date):'-'}</td><td>${hDM?'2,000원':'-'}</td><td style="white-space:nowrap">${hDone?'20,000원':'-'}<button class="settle-del" title="이 내역을 정산에서 제외" onclick="removeSettleEntry('${i.id}')">✕</button></td></tr>`}).join('');
 }
 const ADMIN_ID='hattke',ADMIN_PW='hattke3531';
 let isAdmin=false;try{isAdmin=sessionStorage.getItem('hattke_admin')==='1';}catch(e){}
@@ -1134,8 +1142,9 @@ function cancelSettle(){
 function openHelp(){document.getElementById('help-overlay').classList.add('open')}
 function closeHelp(e){if(!e||e.target===document.getElementById('help-overlay'))document.getElementById('help-overlay').classList.remove('open')}
 
-const APP_VERSION='v2.8';
+const APP_VERSION='v2.9';
 const CHANGELOG=[
+  {v:'v2.9',d:'2026-06-05',items:['협찬 성사는 광고 코드/입금정보 수집 완료 후에만 표시 가능','광고 코드/입금정보 수집 완료 시 협찬 성사 자동 표시(이전 단계로 되돌리면 해제)','정산 내역 옆 ✕ 버튼으로 개별 내역 수동 삭제']},
   {v:'v2.8',d:'2026-06-05',items:['선택 항목 일괄 삭제 기능 추가','상태값이 비정상인 행이 카운트에 잡히던 문제 수정']},
   {v:'v2.7',d:'2026-06-05',items:['역할 명칭 변경 — 아르바이트 → 매니저, 사장 → 관리자']},
   {v:'v2.6',d:'2026-06-05',items:['우측 상단 버전 표시·업데이트 내역 보기 추가']},
@@ -1232,6 +1241,22 @@ function removeGuide(id){
     syncStart();const r=await apiPost('deleteGuide',{id});syncEnd();
     if(!r.success){guides.splice(idx,0,backup);renderGuideTabs();renderGuideList();alert('삭제 실패: '+(r.error||''));}
   });
+}
+async function removeSettleEntry(id){
+  const inf=localGet(id);if(!inf)return;
+  const month=document.getElementById('settlement-month').value;
+  const hDM=inf.dm_sent_date&&formatDate(inf.dm_sent_date).startsWith(month);
+  const hDone=inf.status==='done'&&inf.payment_date&&formatDate(inf.payment_date).startsWith(month);
+  if(!hDM&&!hDone)return;
+  const parts=[];if(hDM)parts.push('DM 발송일');if(hDone)parts.push('협찬 완료일');
+  if(!confirm('@'+(inf.instagram_id||inf.nickname)+' 의 '+month+' 정산 내역을 삭제할까요?\n('+parts.join('·')+' 기록이 지워져 정산 집계에서 빠집니다)'))return;
+  const changes={};
+  if(hDM)changes.dm_sent_date='';
+  if(hDone)changes.payment_date='';
+  const backup={...inf};
+  localUpdate(id,changes);renderSettlement();
+  syncStart();const r=await api('update',Object.assign({id},changes));syncEnd();
+  if(!r.success){localUpdate(id,backup);renderSettlement();alert('삭제 실패: '+(r.error||''))}
 }
 function copySettlement(){
   const month=document.getElementById('settlement-month').value;
