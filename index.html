@@ -203,12 +203,27 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <div class="sett-row"><span>협찬 완료 건수</span><span id="complete-count">0건 × 20,000원 = <b>0원</b></span></div>
       <div class="sett-row"><span style="font-weight:600">합계</span><span class="sett-total" id="total-pay">0원</span></div>
       <div style="margin-top:12px"><button class="btn btn-outline btn-sm" onclick="copySettlement()">📋 클립보드 복사</button></div>
+      <div id="settle-status" style="margin-top:12px"></div>
     </div>
     <div class="table-wrap">
       <table>
         <thead><tr><th>닉네임</th><th>이름</th><th>DM 발송일</th><th>협찬 완료일</th><th>DM</th><th>협찬</th></tr></thead>
         <tbody id="settlement-table"></tbody>
       </table>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="admin-overlay" onclick="closeAdminLogin(event)">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:340px">
+    <h3>🔒 관리자 로그인</h3>
+    <p class="text-muted" style="margin-bottom:14px">정산 완료는 관리자만 가능합니다.</p>
+    <div class="fg"><label>아이디</label><input type="text" id="admin-id" autocomplete="off"></div>
+    <div class="fg"><label>비밀번호</label><input type="password" id="admin-pw" onkeydown="if(event.key==='Enter')submitAdminLogin()"></div>
+    <div id="admin-err" style="color:var(--danger);min-height:16px;font-size:12px"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeAdminLogin()">취소</button>
+      <button class="btn btn-primary" onclick="submitAdminLogin()">로그인</button>
     </div>
   </div>
 </div>
@@ -930,11 +945,80 @@ function renderSettlement(){
   document.getElementById('dm-count').innerHTML=`${dmItems.length}건 × 2,000원 = <b>${dmPay.toLocaleString()}원</b>`;
   document.getElementById('complete-count').innerHTML=`${doneItems.length}건 × 20,000원 = <b>${donePay.toLocaleString()}원</b>`;
   document.getElementById('total-pay').textContent=total.toLocaleString()+'원';
+  renderSettleStatus(month);
   const allIds=[...new Set([...dmItems.map(i=>i.id),...doneItems.map(i=>i.id)])];
   const allItems=allIds.map(id=>influencers.find(i=>i.id===id)).filter(Boolean);
   const tbody=document.getElementById('settlement-table');
   if(!allItems.length){tbody.innerHTML=`<tr><td colspan="6"><div class="empty">해당 월 내역 없음</div></td></tr>`;return}
   tbody.innerHTML=allItems.map(i=>{const hDM=i.dm_sent_date&&formatDate(i.dm_sent_date).startsWith(month);const hDone=i.status==='done'&&i.payment_date&&formatDate(i.payment_date).startsWith(month);return`<tr><td>@${i.instagram_id||i.nickname}</td><td>${i.name||'-'}</td><td>${hDM?formatDate(i.dm_sent_date):'-'}</td><td>${hDone?formatDate(i.payment_date):'-'}</td><td>${hDM?'2,000원':'-'}</td><td>${hDone?'20,000원':'-'}</td></tr>`}).join('');
+}
+const ADMIN_ID='hattke',ADMIN_PW='hattke3531';
+let isAdmin=false;try{isAdmin=sessionStorage.getItem('hattke_admin')==='1';}catch(e){}
+let pendingAdminCb=null;
+function requireAdmin(cb){
+  if(isAdmin){cb();return;}
+  pendingAdminCb=cb;
+  document.getElementById('admin-id').value='';
+  document.getElementById('admin-pw').value='';
+  document.getElementById('admin-err').textContent='';
+  document.getElementById('admin-overlay').classList.add('open');
+  setTimeout(()=>{const el=document.getElementById('admin-id');if(el)el.focus();},50);
+}
+function closeAdminLogin(e){if(!e||e.target===document.getElementById('admin-overlay')){document.getElementById('admin-overlay').classList.remove('open');pendingAdminCb=null;}}
+function submitAdminLogin(){
+  const id=(document.getElementById('admin-id').value||'').trim();
+  const pw=document.getElementById('admin-pw').value||'';
+  if(id===ADMIN_ID&&pw===ADMIN_PW){
+    isAdmin=true;try{sessionStorage.setItem('hattke_admin','1');}catch(e){}
+    document.getElementById('admin-overlay').classList.remove('open');
+    const cb=pendingAdminCb;pendingAdminCb=null;if(cb)cb();
+  }else{
+    document.getElementById('admin-err').textContent='아이디 또는 비밀번호가 올바르지 않습니다.';
+  }
+}
+function getSettleRecord(month){try{return (JSON.parse(localStorage.getItem('hattke_settle')||'{}'))[month]||null}catch(e){return null}}
+function setSettleRecord(month,rec){let all={};try{all=JSON.parse(localStorage.getItem('hattke_settle')||'{}')}catch(e){}if(rec)all[month]=rec;else delete all[month];localStorage.setItem('hattke_settle',JSON.stringify(all));}
+function renderSettleStatus(month){
+  const ss=document.getElementById('settle-status');if(!ss)return;
+  const rec=getSettleRecord(month);
+  if(rec){
+    ss.innerHTML=`<div style="background:#14301c;border:1px solid #22c55e;border-radius:8px;padding:10px 12px">
+      <div style="color:#22c55e;font-weight:700;margin-bottom:4px">✓ 정산 완료</div>
+      <div class="text-muted">완료일 <b style="color:var(--text)">${rec.date}</b> · 입금액 <b style="color:var(--text)">${Number(rec.amount).toLocaleString()}원</b></div>
+      <div style="margin-top:8px;display:flex;gap:6px">
+        <button class="btn btn-outline btn-sm" onclick="startSettleComplete()">수정</button>
+        <button class="btn btn-sm" style="border:1px solid var(--danger);background:none;color:var(--danger)" onclick="cancelSettle()">정산 취소</button>
+      </div>
+    </div>`;
+  }else{
+    ss.innerHTML=`<button class="btn btn-success" onclick="startSettleComplete()">✅ 정산 완료 처리 (관리자)</button>`;
+  }
+}
+function computeSettleTotal(month){
+  const dm=influencers.filter(i=>i.dm_sent_date&&formatDate(i.dm_sent_date).startsWith(month)).length;
+  const done=influencers.filter(i=>i.status==='done'&&i.payment_date&&formatDate(i.payment_date).startsWith(month)).length;
+  return dm*2000+done*20000;
+}
+function startSettleComplete(){
+  requireAdmin(()=>{
+    const month=document.getElementById('settlement-month').value;if(!month)return;
+    const existing=getSettleRecord(month);
+    const def=existing?existing.amount:computeSettleTotal(month);
+    const amtStr=prompt(`${month} 정산 완료 처리\n실제 입금액(원)을 입력하세요:`,String(def));
+    if(amtStr===null)return;
+    const amount=parseInt(String(amtStr).replace(/[^0-9]/g,''))||0;
+    const date=new Date().toISOString().split('T')[0];
+    setSettleRecord(month,{date,amount});
+    renderSettlement();
+  });
+}
+function cancelSettle(){
+  requireAdmin(()=>{
+    const month=document.getElementById('settlement-month').value;if(!month)return;
+    if(!confirm(`${month} 정산 완료를 취소할까요?`))return;
+    setSettleRecord(month,null);
+    renderSettlement();
+  });
 }
 function copySettlement(){
   const month=document.getElementById('settlement-month').value;
