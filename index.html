@@ -271,6 +271,7 @@ let influencers=[],selectedId=null,currentFilter='all';
 let selectedIds=new Set();
 let stage2ProductOnly=false;
 let currentProduct='all';
+let settlements={};
 const uploadedFiles={};
 
 function getNextStageId(s){
@@ -348,6 +349,7 @@ window.onload=()=>{
   document.getElementById('add-recruited-date').value=new Date().toISOString().split('T')[0];
   setThisMonth();showLoading();initTouchDrag();
   api('getAll').then(r=>{hideLoading();if(r.success){influencers=r.data.filter(d=>d.status!=='deleted');render()}});
+  api('getSettlements').then(r=>{if(r.success&&r.data){settlements=r.data;if(document.getElementById('tab-settlement').classList.contains('active'))renderSettlement();}});
 };
 function switchTab(name,btn){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
@@ -976,8 +978,7 @@ function submitAdminLogin(){
     document.getElementById('admin-err').textContent='아이디 또는 비밀번호가 올바르지 않습니다.';
   }
 }
-function getSettleRecord(month){try{return (JSON.parse(localStorage.getItem('hattke_settle')||'{}'))[month]||null}catch(e){return null}}
-function setSettleRecord(month,rec){let all={};try{all=JSON.parse(localStorage.getItem('hattke_settle')||'{}')}catch(e){}if(rec)all[month]=rec;else delete all[month];localStorage.setItem('hattke_settle',JSON.stringify(all));}
+function getSettleRecord(month){return settlements[month]||null;}
 function renderSettleStatus(month){
   const ss=document.getElementById('settle-status');if(!ss)return;
   const rec=getSettleRecord(month);
@@ -1000,7 +1001,7 @@ function computeSettleTotal(month){
   return dm*2000+done*20000;
 }
 function startSettleComplete(){
-  requireAdmin(()=>{
+  requireAdmin(async()=>{
     const month=document.getElementById('settlement-month').value;if(!month)return;
     const existing=getSettleRecord(month);
     const def=existing?existing.amount:computeSettleTotal(month);
@@ -1008,16 +1009,20 @@ function startSettleComplete(){
     if(amtStr===null)return;
     const amount=parseInt(String(amtStr).replace(/[^0-9]/g,''))||0;
     const date=new Date().toISOString().split('T')[0];
-    setSettleRecord(month,{date,amount});
-    renderSettlement();
+    const prev=settlements[month]||null;
+    settlements[month]={date,amount};renderSettlement();
+    syncStart();const r=await api('saveSettlement',{month,date,amount});syncEnd();
+    if(!r.success){if(prev)settlements[month]=prev;else delete settlements[month];renderSettlement();alert('정산 저장 실패: '+(r.error||''));}
   });
 }
 function cancelSettle(){
-  requireAdmin(()=>{
+  requireAdmin(async()=>{
     const month=document.getElementById('settlement-month').value;if(!month)return;
     if(!confirm(`${month} 정산 완료를 취소할까요?`))return;
-    setSettleRecord(month,null);
-    renderSettlement();
+    const prev=settlements[month]||null;
+    delete settlements[month];renderSettlement();
+    syncStart();const r=await api('deleteSettlement',{month});syncEnd();
+    if(!r.success){if(prev)settlements[month]=prev;renderSettlement();alert('정산 취소 실패: '+(r.error||''));}
   });
 }
 function copySettlement(){
