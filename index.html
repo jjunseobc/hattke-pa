@@ -176,7 +176,7 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <button onclick="switchTab('settlement',this)">정산</button>
     </nav>
     <button class="btn btn-outline btn-sm" style="margin-left:auto;white-space:nowrap" onclick="openHelp()">📖 프로그램 사용법</button>
-    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.11</button>
+    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.12</button>
     <span id="sync-badge">동기화 중...</span>
   </header>
 
@@ -407,7 +407,10 @@ let syncCount=0;
 function syncStart(){syncCount++;document.getElementById('sync-badge').classList.add('show')}
 function syncEnd(){syncCount=Math.max(0,syncCount-1);if(!syncCount)document.getElementById('sync-badge').classList.remove('show')}
 
+function isTempId(id){return String(id||'').startsWith('temp_');}
+const SAVING_MSG='아직 저장 중인 항목입니다. 1~2초 후 다시 시도해주세요.';
 async function api(action,data){
+  if(data&&isTempId(data.id)&&action!=='add')return{success:false,error:SAVING_MSG};
   try{
     const url=new URL(SCRIPT_URL);url.searchParams.set('action',action);
     if(data)url.searchParams.set('data',JSON.stringify(data));
@@ -415,6 +418,7 @@ async function api(action,data){
   }catch(e){return{success:false,error:e.message}}
 }
 async function apiPost(action,data){
+  if(data&&isTempId(data.id)&&action!=='addGuide')return{success:false,error:SAVING_MSG};
   try{
     const res=await fetch(SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(Object.assign({action},data||{}))});
     return await res.json();
@@ -768,7 +772,9 @@ async function bulkReject(){
 }
 async function bulkDelete(){
   if(!confirm(selectedIds.size+'명을 완전히 삭제할까요?\n삭제 후 복구할 수 없습니다.'))return;
-  const ids=[...selectedIds];
+  const pending=[...selectedIds].filter(isTempId).length;
+  if(pending>0)alert(pending+'명은 아직 저장 중이라 삭제에서 제외했습니다.');
+  const ids=[...selectedIds].filter(id=>!isTempId(id));
   ids.forEach(id=>localRemove(id));
   selectedIds.clear();updateBulkBar();render();closePanel();
   syncStart();
@@ -1059,6 +1065,7 @@ async function restoreInfluencer(){
   if(!r.success){localUpdate(selectedId,backup);render();renderPanel()}
 }
 async function deleteInfluencer(){
+  if(isTempId(selectedId)){alert(SAVING_MSG);return}
   if(!confirm('완전히 삭제할까요?\n삭제 후 복구 불가능합니다.'))return;
   const deletedId=selectedId;const backup={...localGet(deletedId)};
   localRemove(deletedId);closePanel();render();
@@ -1157,8 +1164,9 @@ function cancelSettle(){
 function openHelp(){document.getElementById('help-overlay').classList.add('open')}
 function closeHelp(e){if(!e||e.target===document.getElementById('help-overlay'))document.getElementById('help-overlay').classList.remove('open')}
 
-const APP_VERSION='v2.11';
+const APP_VERSION='v2.12';
 const CHANGELOG=[
+  {v:'v2.12',d:'2026-06-05',items:['신규 항목 저장 중(1~2초) 조작 시 발생하던 [저장 실패: Not found] 오류를 안내 메시지로 개선(저장 중 보호)']},
   {v:'v2.11',d:'2026-06-05',items:['단계 필터 재배치 — 전체(좌)/진행단계(중앙)/거절됨·완료됨(우)','전체·거절됨·완료됨 탭을 이모지 대신 버튼 색상으로 구분']},
   {v:'v2.10',d:'2026-06-05',items:['제품 탭 전체 버튼 색상 구분(보라), 미지정 탭 제거','인플루언서 추가 시 협찬 제품 선택 필수화','단계 필터 전체🔵/거절됨❌/완료됨✅ 표시','대시보드에서 거절됨 카드 제거']},
   {v:'v2.9',d:'2026-06-05',items:['협찬 성사는 광고 코드/입금정보 수집 완료 후에만 표시 가능','광고 코드/입금정보 수집 완료 시 협찬 성사 자동 표시(이전 단계로 되돌리면 해제)','정산 내역 옆 ✕ 버튼으로 개별 내역 수동 삭제']},
