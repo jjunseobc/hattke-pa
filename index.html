@@ -128,6 +128,18 @@ input[type=file]{background:var(--surface2);border:1px dashed var(--border);colo
 .ptab-add{color:var(--primary);border-style:dashed}
 .ptab-all{border-color:#8b5cf6;color:#c4b5fd;background:#221a35}
 .ptab-all.active{background:#8b5cf6;border-color:#8b5cf6;color:#fff}
+.ft-side{flex:1;display:flex;gap:5px;flex-wrap:wrap}
+.ft-right{justify-content:flex-end}
+.ft-center{display:flex;gap:5px;flex-wrap:wrap;justify-content:center}
+.filter-tab.ft-all{border-color:#8b5cf6;color:#c4b5fd;background:#221a35}
+.filter-tab.ft-all.active{background:#8b5cf6;border-color:#8b5cf6;color:#fff}
+.filter-tab.ft-all:hover:not(.active){border-color:#8b5cf6;color:#c4b5fd}
+.filter-tab.ft-rej{border-color:#7f2d24;color:#f1948a;background:#2c1512}
+.filter-tab.ft-rej.active{background:#e74c3c;border-color:#e74c3c;color:#fff}
+.filter-tab.ft-rej:hover:not(.active){border-color:#e74c3c;color:#f1948a}
+.filter-tab.ft-done{border-color:#1d7a3d;color:#86efac;background:#0f2818}
+.filter-tab.ft-done.active{background:#22c55e;border-color:#22c55e;color:#fff}
+.filter-tab.ft-done:hover:not(.active){border-color:#22c55e;color:#86efac}
 .settle-del{background:none;border:1px solid var(--border);color:var(--muted);border-radius:4px;font-size:10px;padding:1px 5px;cursor:pointer;margin-left:6px;vertical-align:middle}
 .settle-del:hover{border-color:var(--danger);color:var(--danger)}
 .guide-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px}
@@ -164,7 +176,7 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <button onclick="switchTab('settlement',this)">정산</button>
     </nav>
     <button class="btn btn-outline btn-sm" style="margin-left:auto;white-space:nowrap" onclick="openHelp()">📖 프로그램 사용법</button>
-    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.10</button>
+    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.11</button>
     <span id="sync-badge">동기화 중...</span>
   </header>
 
@@ -511,16 +523,18 @@ function promptAddProduct(){
 }
 function renderFilterTabs(){
   const active=influencers.filter(i=>i.status==='active'&&productMatch(i));
-  let html=`<div class="filter-tab ${currentFilter==='all'?'active':''}" onclick="setFilter('all')">🔵 전체 (${active.length})</div>`;
+  const allTab=`<div class="filter-tab ft-all ${currentFilter==='all'?'active':''}" onclick="setFilter('all')">전체 (${active.length})</div>`;
+  let stageTabs='';
   STAGES.forEach(s=>{
     const count=s.id===0?active.filter(i=>Number(i.stage)===0||Number(i.stage)===1).length:active.filter(i=>Number(i.stage)===s.id).length;
-    html+=`<div class="filter-tab ${currentFilter===s.id?'active':''}" onclick="setFilter(${s.id})" data-drop="stage" data-stage="${s.id}" ondragover="onTabDragOver(event)" ondragleave="onTabDragLeave(event)" ondrop="onTabDrop(event,${s.id})">${getStageRole(s.id)==='boss'?'🔴':'🟡'} ${s.name} (${count})</div>`;
+    stageTabs+=`<div class="filter-tab ${currentFilter===s.id?'active':''}" onclick="setFilter(${s.id})" data-drop="stage" data-stage="${s.id}" ondragover="onTabDragOver(event)" ondragleave="onTabDragLeave(event)" ondrop="onTabDrop(event,${s.id})">${getStageRole(s.id)==='boss'?'🔴':'🟡'} ${s.name} (${count})</div>`;
   });
   const rejCount=influencers.filter(i=>i.status==='rejected'&&productMatch(i)).length;
-  html+=`<div class="filter-tab ${currentFilter==='rejected'?'active':''}" onclick="setFilter('rejected')" data-drop="reject" ondragover="onTabDragOver(event)" ondragleave="onTabDragLeave(event)" ondrop="onTabDrop(event,'rejected')">❌ 거절됨 (${rejCount})</div>`;
+  const rejTab=`<div class="filter-tab ft-rej ${currentFilter==='rejected'?'active':''}" onclick="setFilter('rejected')" data-drop="reject" ondragover="onTabDragOver(event)" ondragleave="onTabDragLeave(event)" ondrop="onTabDrop(event,'rejected')">거절됨 (${rejCount})</div>`;
   const doneCount=influencers.filter(i=>i.status==='done'&&productMatch(i)).length;
-  html+=`<div class="filter-tab ${currentFilter==='done'?'active':''}" onclick="setFilter('done')">✅ 완료됨 (${doneCount})</div>`;
-  document.getElementById('filter-tabs').innerHTML=html;
+  const doneTab=`<div class="filter-tab ft-done ${currentFilter==='done'?'active':''}" onclick="setFilter('done')">완료됨 (${doneCount})</div>`;
+  document.getElementById('filter-tabs').innerHTML=
+    `<div class="ft-side">${allTab}</div><div class="ft-center">${stageTabs}</div><div class="ft-side ft-right">${rejTab}${doneTab}</div>`;
 }
 function setFilter(f){currentFilter=f;renderFilterTabs();renderList()}
 function jumpToFilter(id){switchTab('management',document.querySelectorAll('nav button')[1]);setFilter(id)}
@@ -1143,8 +1157,9 @@ function cancelSettle(){
 function openHelp(){document.getElementById('help-overlay').classList.add('open')}
 function closeHelp(e){if(!e||e.target===document.getElementById('help-overlay'))document.getElementById('help-overlay').classList.remove('open')}
 
-const APP_VERSION='v2.10';
+const APP_VERSION='v2.11';
 const CHANGELOG=[
+  {v:'v2.11',d:'2026-06-05',items:['단계 필터 재배치 — 전체(좌)/진행단계(중앙)/거절됨·완료됨(우)','전체·거절됨·완료됨 탭을 이모지 대신 버튼 색상으로 구분']},
   {v:'v2.10',d:'2026-06-05',items:['제품 탭 전체 버튼 색상 구분(보라), 미지정 탭 제거','인플루언서 추가 시 협찬 제품 선택 필수화','단계 필터 전체🔵/거절됨❌/완료됨✅ 표시','대시보드에서 거절됨 카드 제거']},
   {v:'v2.9',d:'2026-06-05',items:['협찬 성사는 광고 코드/입금정보 수집 완료 후에만 표시 가능','광고 코드/입금정보 수집 완료 시 협찬 성사 자동 표시(이전 단계로 되돌리면 해제)','정산 내역 옆 ✕ 버튼으로 개별 내역 수동 삭제']},
   {v:'v2.8',d:'2026-06-05',items:['선택 항목 일괄 삭제 기능 추가','상태값이 비정상인 행이 카운트에 잡히던 문제 수정']},
