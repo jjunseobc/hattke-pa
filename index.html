@@ -161,10 +161,13 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
   .cards{grid-template-columns:repeat(3,1fr)}
   header{padding:0 14px;gap:14px}
   .tab{padding:14px}
-  /* 헤더: 가로 스크롤로 탭/버튼 접근 가능하게 */
-  header{overflow-x:auto;-webkit-overflow-scrolling:touch}
-  header h1{font-size:14px}
-  nav button{padding:14px 10px;font-size:13px}
+  /* 헤더: 가로 스크롤로 탭/버튼 접근 가능하게 (글자 세로 줄바꿈 방지) */
+  header{overflow-x:auto;-webkit-overflow-scrolling:touch;gap:10px}
+  header h1{font-size:14px;flex-shrink:0}
+  nav{flex-shrink:0}
+  nav button{padding:14px 10px;font-size:13px;white-space:nowrap;flex-shrink:0}
+  header>.btn{flex-shrink:0}
+  #sync-badge{flex-shrink:0}
   /* 테이블 → 카드형 전환 (12컬럼이 세로 줄바꿈/잘림 방지) */
   .table-wrap{border:none;background:none;border-radius:0;overflow:visible}
   .table-wrap table,.table-wrap tbody,.table-wrap tr,.table-wrap td{display:block;width:100%}
