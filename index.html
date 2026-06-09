@@ -161,6 +161,24 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
   .cards{grid-template-columns:repeat(3,1fr)}
   header{padding:0 14px;gap:14px}
   .tab{padding:14px}
+  /* 헤더: 가로 스크롤로 탭/버튼 접근 가능하게 */
+  header{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  header h1{font-size:14px}
+  nav button{padding:14px 10px;font-size:13px}
+  /* 테이블 → 카드형 전환 (12컬럼이 세로 줄바꿈/잘림 방지) */
+  .table-wrap{border:none;background:none;border-radius:0;overflow:visible}
+  .table-wrap table,.table-wrap tbody,.table-wrap tr,.table-wrap td{display:block;width:100%}
+  .table-wrap thead{display:none}
+  .table-wrap tbody tr{background:var(--surface);border:1px solid var(--border)!important;border-radius:10px;margin-bottom:10px;padding:12px 14px 8px;position:relative}
+  .table-wrap td{padding:5px 0;border:none;display:flex;justify-content:space-between;align-items:center;gap:12px;text-align:right!important;white-space:normal;min-height:0}
+  .table-wrap td::before{content:attr(data-label);color:var(--muted);font-size:11px;font-weight:600;text-align:left;flex-shrink:0;white-space:nowrap}
+  .table-wrap td.cell-name{display:block;font-size:15px;padding:0 34px 8px 0;margin-bottom:4px;border-bottom:1px solid var(--border);text-align:left!important}
+  .table-wrap td.cell-name::before{content:none}
+  .table-wrap td.cell-cb{position:absolute;top:11px;right:13px;width:auto;padding:0}
+  .table-wrap td.cell-cb::before{content:none}
+  .table-wrap td .btn-sm{padding:3px 11px}
+  .table-wrap td[colspan]{text-align:center!important}
+  .table-wrap td[colspan]::before{content:none}
 }
 </style>
 </head>
@@ -176,7 +194,7 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <button onclick="switchTab('settlement',this)">정산</button>
     </nav>
     <button class="btn btn-outline btn-sm" style="margin-left:auto;white-space:nowrap" onclick="openHelp()">📖 프로그램 사용법</button>
-    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.13</button>
+    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.14</button>
     <span id="sync-badge">동기화 중...</span>
   </header>
 
@@ -692,21 +710,21 @@ function renderList(){
       dmBtn=`<span class="btn btn-sm" style="min-width:32px;background:var(--success);color:#fff;border:1px solid var(--success);cursor:default">Y</span>`;
     }
     return`<tr class="${String(selectedId)===String(i.id)?'selected':''} ${i._opt?'optimistic':''}" data-id="${i.id}" draggable="true" ondragstart="onRowDragStart(event,'${i.id}')" ondragend="onRowDragEnd()" onclick="openDetail('${i.id}')">
-      <td onclick="event.stopPropagation()"><input type="checkbox" ${selectedIds.has(String(i.id))?'checked':''} onchange="toggleSelect('${i.id}',event)"></td>
-      <td>${prodBadge}<b>@${i.instagram_id||i.nickname||'-'}</b></td><td>${i.name||'-'}</td>
-      <td class="muted">${i.followers?formatFollowers(i.followers):'-'}</td>
-      <td class="muted">${formatDate(i.recruited_date)}</td>
-      <td><span class="stage-badge" style="background:${si.color}22;color:${si.color}">${si.name}</span></td>
-      <td onclick="event.stopPropagation()" style="text-align:center">${dmBtn}</td>
-      <td onclick="event.stopPropagation()" style="text-align:center">
+      <td class="cell-cb" onclick="event.stopPropagation()"><input type="checkbox" ${selectedIds.has(String(i.id))?'checked':''} onchange="toggleSelect('${i.id}',event)"></td>
+      <td class="cell-name">${prodBadge}<b>@${i.instagram_id||i.nickname||'-'}</b></td><td data-label="이름">${i.name||'-'}</td>
+      <td class="muted" data-label="팔로워">${i.followers?formatFollowers(i.followers):'-'}</td>
+      <td class="muted" data-label="모집일">${formatDate(i.recruited_date)}</td>
+      <td data-label="단계"><span class="stage-badge" style="background:${si.color}22;color:${si.color}">${si.name}</span></td>
+      <td data-label="DM발송" onclick="event.stopPropagation()" style="text-align:center">${dmBtn}</td>
+      <td data-label="협찬성사" onclick="event.stopPropagation()" style="text-align:center">
         ${(i.status==='done'||Number(i.stage)===7||Number(i.stage)===8)
           ?`<button class="btn btn-sm" style="min-width:32px;background:${spY?'var(--success)':'var(--surface3)'};color:${spY?'#fff':'var(--muted)'};border:1px solid ${spY?'var(--success)':'var(--border)'}" onclick="toggleSponsorship('${i.id}',event)">${spY?'Y':'N'}</button>`
           :`<span class="btn btn-sm" title="광고 코드/입금정보 수집 단계 완료 후 자동 표시됩니다" style="min-width:32px;background:var(--surface3);color:var(--muted);border:1px solid var(--border);cursor:default;opacity:.45">${spY?'Y':'N'}</span>`}
       </td>
-      <td style="text-align:right;color:${dmY?'#ffc107':'var(--muted)'};font-size:12px">${dmY?'2,000원':'-'}</td>
-      <td style="text-align:right;color:${spY?'#4f8ef7':'var(--muted)'};font-size:12px">${spY?'20,000원':'-'}</td>
-      <td style="text-align:right;font-weight:${subtotal>0?'600':'400'};color:${subtotal>0?'#22c55e':'var(--muted)'};font-size:12px">${subtotal>0?subtotal.toLocaleString()+'원':'-'}</td>
-      <td onclick="event.stopPropagation()" style="white-space:nowrap">
+      <td data-label="DM수당" style="text-align:right;color:${dmY?'#ffc107':'var(--muted)'};font-size:12px">${dmY?'2,000원':'-'}</td>
+      <td data-label="성사수당" style="text-align:right;color:${spY?'#4f8ef7':'var(--muted)'};font-size:12px">${spY?'20,000원':'-'}</td>
+      <td data-label="소계" style="text-align:right;font-weight:${subtotal>0?'600':'400'};color:${subtotal>0?'#22c55e':'var(--muted)'};font-size:12px">${subtotal>0?subtotal.toLocaleString()+'원':'-'}</td>
+      <td data-label="릴스" onclick="event.stopPropagation()" style="white-space:nowrap">
         ${i.reels_url?`<a class="link-btn" href="${i.reels_url}" target="_blank">릴스↗</a>`:'—'}
       </td>
     </tr>`;
@@ -1088,7 +1106,7 @@ function renderSettlement(){
   const allItems=allIds.map(id=>influencers.find(i=>i.id===id)).filter(Boolean);
   const tbody=document.getElementById('settlement-table');
   if(!allItems.length){tbody.innerHTML=`<tr><td colspan="6"><div class="empty">해당 월 내역 없음</div></td></tr>`;return}
-  tbody.innerHTML=allItems.map(i=>{const hDM=i.dm_sent_date&&formatDate(i.dm_sent_date).startsWith(month);const hDone=i.status==='done'&&i.payment_date&&formatDate(i.payment_date).startsWith(month);return`<tr><td>@${i.instagram_id||i.nickname}</td><td>${i.name||'-'}</td><td>${hDM?formatDate(i.dm_sent_date):'-'}</td><td>${hDone?formatDate(i.payment_date):'-'}</td><td>${hDM?'2,000원':'-'}</td><td style="white-space:nowrap">${hDone?'20,000원':'-'}<button class="settle-del" title="이 내역을 정산에서 제외" onclick="removeSettleEntry('${i.id}')">✕</button></td></tr>`}).join('');
+  tbody.innerHTML=allItems.map(i=>{const hDM=i.dm_sent_date&&formatDate(i.dm_sent_date).startsWith(month);const hDone=i.status==='done'&&i.payment_date&&formatDate(i.payment_date).startsWith(month);return`<tr><td class="cell-name">@${i.instagram_id||i.nickname}</td><td data-label="이름">${i.name||'-'}</td><td data-label="DM 발송일">${hDM?formatDate(i.dm_sent_date):'-'}</td><td data-label="협찬 완료일">${hDone?formatDate(i.payment_date):'-'}</td><td data-label="DM">${hDM?'2,000원':'-'}</td><td data-label="협찬" style="white-space:nowrap">${hDone?'20,000원':'-'}<button class="settle-del" title="이 내역을 정산에서 제외" onclick="removeSettleEntry('${i.id}')">✕</button></td></tr>`}).join('');
 }
 const ADMIN_ID='hattke',ADMIN_PW='hattke3531';
 let isAdmin=false;try{isAdmin=sessionStorage.getItem('hattke_admin')==='1';}catch(e){}
@@ -1164,8 +1182,9 @@ function cancelSettle(){
 function openHelp(){document.getElementById('help-overlay').classList.add('open')}
 function closeHelp(e){if(!e||e.target===document.getElementById('help-overlay'))document.getElementById('help-overlay').classList.remove('open')}
 
-const APP_VERSION='v2.13';
+const APP_VERSION='v2.14';
 const CHANGELOG=[
+  {v:'v2.14',d:'2026-06-09',items:['모바일 화면 최적화: 인플루언서·정산 목록을 카드형으로 표시(릴스 등 모든 항목이 잘리지 않고 보임), 글자 세로 줄바꿈 해결, 상단 탭 가로 스크롤']},
   {v:'v2.13',d:'2026-06-05',items:['제품 발송 단계를 관리자 담당으로 변경']},
   {v:'v2.12',d:'2026-06-05',items:['신규 항목 저장 중(1~2초) 조작 시 발생하던 [저장 실패: Not found] 오류를 안내 메시지로 개선(저장 중 보호)']},
   {v:'v2.11',d:'2026-06-05',items:['단계 필터 재배치 — 전체(좌)/진행단계(중앙)/거절됨·완료됨(우)','전체·거절됨·완료됨 탭을 이모지 대신 버튼 색상으로 구분']},
