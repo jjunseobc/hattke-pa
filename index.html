@@ -197,7 +197,7 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <button onclick="switchTab('settlement',this)">정산</button>
     </nav>
     <button class="btn btn-outline btn-sm" style="margin-left:auto;white-space:nowrap" onclick="openHelp()">📖 프로그램 사용법</button>
-    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.14</button>
+    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.15</button>
     <span id="sync-badge">동기화 중...</span>
   </header>
 
@@ -346,7 +346,7 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
 <div class="overlay" id="add-overlay" onclick="closeAddModal(event)">
   <div class="modal" onclick="event.stopPropagation()">
     <h3>인플루언서 추가</h3>
-    <div class="fg"><label>협찬 제품</label><input type="text" id="add-product" list="product-datalist" placeholder="제품명 입력 또는 선택"></div>
+    <div class="fg"><label>협찬 제품</label><select id="add-product"></select></div>
     <div class="fg"><label>인스타그램 URL</label><input type="text" id="insta-url" placeholder="https://www.instagram.com/계정명/reels/" oninput="parseUrl()"></div>
     <div class="fg"><label>계정명 (자동)</label><input type="text" id="add-instagram-id" class="auto-fill" readonly></div>
     <div class="fg"><label>릴스 주소 (자동)</label><input type="text" id="add-reels-url" class="auto-fill" readonly></div>
@@ -823,11 +823,21 @@ async function quickAdvance(id,e){
   if(!r.success){localUpdate(id,backup);render();alert('저장 실패: '+r.error)}
 }
 
+function getLastProduct(){try{return localStorage.getItem('hattke_last_product')||''}catch(e){return ''}}
+function setLastProduct(p){try{localStorage.setItem('hattke_last_product',p||'')}catch(e){}}
 function openAddModal(){
   ['insta-url','add-instagram-id','add-reels-url','add-name','add-followers'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('add-recruited-date').value=new Date().toISOString().split('T')[0];
-  refreshProductDatalist();
-  document.getElementById('add-product').value=(currentProduct!=='all'&&currentProduct!=='__none__')?currentProduct:'';
+  const sel=document.getElementById('add-product');
+  const products=getProducts();
+  // 현재 보고 있는 제품 탭 > 마지막에 작성한 제품 순으로 기본 선택
+  const preferred=(currentProduct!=='all'&&currentProduct!=='__none__')?currentProduct:getLastProduct();
+  if(!products.length){
+    sel.innerHTML='<option value="">제품 없음 — [+ 제품 추가]에서 먼저 등록</option>';
+  }else{
+    sel.innerHTML=products.map(p=>`<option value="${escHtml(p)}"${p===preferred?' selected':''}>${escHtml(p)}</option>`).join('');
+    if(products.includes(preferred))sel.value=preferred;
+  }
   document.getElementById('add-overlay').classList.add('open');
 }
 function closeAddModal(e){if(!e||e.target===document.getElementById('add-overlay'))document.getElementById('add-overlay').classList.remove('open')}
@@ -839,7 +849,7 @@ async function submitAdd(){
   if(!instagram_id)return alert('URL을 먼저 입력해주세요.');
   const tempId='temp_'+Date.now();
   const item={id:tempId,_opt:true,instagram_id,nickname:instagram_id,name:document.getElementById('add-name').value.trim(),followers:document.getElementById('add-followers').value.trim(),reels_url:document.getElementById('add-reels-url').value.trim(),recruited_date:document.getElementById('add-recruited-date').value,product:document.getElementById('add-product').value.trim(),stage:0,status:'active',memo:''};
-  if(item.product)addProduct(item.product);
+  if(item.product){addProduct(item.product);setLastProduct(item.product);}
   localAdd(item);closeAddModal();render();
   syncStart();const r=await api('add',item);syncEnd();
   if(r.success){localUpdate(tempId,{id:r.id,_opt:false});render()}
@@ -1185,8 +1195,9 @@ function cancelSettle(){
 function openHelp(){document.getElementById('help-overlay').classList.add('open')}
 function closeHelp(e){if(!e||e.target===document.getElementById('help-overlay'))document.getElementById('help-overlay').classList.remove('open')}
 
-const APP_VERSION='v2.14';
+const APP_VERSION='v2.15';
 const CHANGELOG=[
+  {v:'v2.15',d:'2026-06-09',items:['인플루언서 추가 시 협찬 제품을 드롭다운(목록 선택)으로 변경','마지막에 작성한 제품이 자동으로 선택되도록 고정']},
   {v:'v2.14',d:'2026-06-09',items:['모바일 화면 최적화: 인플루언서·정산 목록을 카드형으로 표시(릴스 등 모든 항목이 잘리지 않고 보임), 글자 세로 줄바꿈 해결, 상단 탭 가로 스크롤']},
   {v:'v2.13',d:'2026-06-05',items:['제품 발송 단계를 관리자 담당으로 변경']},
   {v:'v2.12',d:'2026-06-05',items:['신규 항목 저장 중(1~2초) 조작 시 발생하던 [저장 실패: Not found] 오류를 안내 메시지로 개선(저장 중 보호)']},
