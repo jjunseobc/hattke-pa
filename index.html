@@ -197,7 +197,7 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <button onclick="switchTab('settlement',this)">정산</button>
     </nav>
     <button class="btn btn-outline btn-sm" style="margin-left:auto;white-space:nowrap" onclick="openHelp()">📖 프로그램 사용법</button>
-    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.15</button>
+    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.16</button>
     <span id="sync-badge">동기화 중...</span>
   </header>
 
@@ -779,7 +779,7 @@ function clearSelection(){selectedIds.clear();updateBulkBar();renderList()}
 async function bulkAdvance(){
   const ids=[...selectedIds];
   let blocked=0;const advanced=[];
-  ids.forEach(id=>{const inf=localGet(id);if(!inf||inf.status!=='active')return;if(needsContactInfo(inf)){blocked++;return}const next=getNextStageId(Number(inf.stage));if(next!==null){const ch=next===7?{stage:next,sponsorship_done:'Y'}:{stage:next};localUpdate(id,ch);advanced.push({id,ch})}});
+  ids.forEach(id=>{const inf=localGet(id);if(!inf||inf.status!=='active')return;if(needsContactInfo(inf)){blocked++;return}const next=getNextStageId(Number(inf.stage));if(next!==null){const ch=next===7?{stage:next,sponsorship_done:'Y'}:{stage:next};if(Number(inf.stage)<=1){ch.dm_sent='Y';ch.dm_sent_date=inf.dm_sent_date||new Date().toISOString().split('T')[0];}localUpdate(id,ch);advanced.push({id,ch})}});
   selectedIds.clear();updateBulkBar();render();
   syncStart();await Promise.all(advanced.map(a=>api('update',Object.assign({id:a.id},a.ch))));syncEnd();
   if(blocked>0)alert(blocked+'명은 실명·연락처가 없어 DM 발송 단계에 그대로 두었습니다. 개별로 입력 후 진행해주세요.');
@@ -1195,8 +1195,9 @@ function cancelSettle(){
 function openHelp(){document.getElementById('help-overlay').classList.add('open')}
 function closeHelp(e){if(!e||e.target===document.getElementById('help-overlay'))document.getElementById('help-overlay').classList.remove('open')}
 
-const APP_VERSION='v2.15';
+const APP_VERSION='v2.16';
 const CHANGELOG=[
+  {v:'v2.16',d:'2026-06-09',items:['정산 누락 버그 수정: 여러 명을 한꺼번에 다음 단계로 넘길 때 DM 발송일이 기록되지 않아 정산에서 빠지던 문제 해결','기존에 DM 발송일이 비어 있던 인플루언서 정산 내역 보정']},
   {v:'v2.15',d:'2026-06-09',items:['인플루언서 추가 시 협찬 제품을 드롭다운(목록 선택)으로 변경','마지막에 작성한 제품이 자동으로 선택되도록 고정']},
   {v:'v2.14',d:'2026-06-09',items:['모바일 화면 최적화: 인플루언서·정산 목록을 카드형으로 표시(릴스 등 모든 항목이 잘리지 않고 보임), 글자 세로 줄바꿈 해결, 상단 탭 가로 스크롤']},
   {v:'v2.13',d:'2026-06-05',items:['제품 발송 단계를 관리자 담당으로 변경']},
