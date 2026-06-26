@@ -197,7 +197,7 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <button onclick="switchTab('settlement',this)">정산</button>
     </nav>
     <button class="btn btn-outline btn-sm" style="margin-left:auto;white-space:nowrap" onclick="openHelp()">📖 프로그램 사용법</button>
-    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.17</button>
+    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.18</button>
     <span id="sync-badge">동기화 중...</span>
   </header>
 
@@ -445,7 +445,27 @@ async function apiPost(action,data){
     return await res.json();
   }catch(e){return{success:false,error:e.message}}
 }
+// 업로드 전 이미지 축소·압축 (사진 용량을 줄여 업로드 속도 향상). PDF·HEIC는 원본 유지
+function compressImage(file){
+  return new Promise(resolve=>{
+    if(!/^image\//i.test(file.type)||/heic|heif/i.test(file.type)){resolve(file);return;}
+    const url=URL.createObjectURL(file);const img=new Image();
+    img.onload=()=>{
+      const maxDim=1600;let w=img.naturalWidth,h=img.naturalHeight;
+      if(Math.max(w,h)>maxDim){const r=maxDim/Math.max(w,h);w=Math.round(w*r);h=Math.round(h*r);}
+      const c=document.createElement('canvas');c.width=w;c.height=h;
+      c.getContext('2d').drawImage(img,0,0,w,h);
+      c.toBlob(blob=>{URL.revokeObjectURL(url);
+        if(blob&&blob.size<file.size){resolve(new File([blob],String(file.name).replace(/\.[^.\/\\]+$/,'')+'.jpg',{type:'image/jpeg'}));}
+        else resolve(file);
+      },'image/jpeg',0.7);
+    };
+    img.onerror=()=>{URL.revokeObjectURL(url);resolve(file);};
+    img.src=url;
+  });
+}
 async function uploadToDrive(file,label){
+  file=await compressImage(file);
   return new Promise(resolve=>{
     const reader=new FileReader();
     reader.onload=async(e)=>{
@@ -460,13 +480,32 @@ async function uploadToDrive(file,label){
     reader.readAsDataURL(file);
   });
 }
+const FILE_FIELD={'p-contract-file':'contract_file','p-bankbook-file':'bankbook_file','p-id-file':'id_file'};
+function fileStatusHtml(url,inputId,statusId){
+  const field=FILE_FIELD[inputId]||'';
+  return `✓ <a href="${url}" target="_blank" style="color:var(--success)">파일 보기</a> <button type="button" class="btn btn-sm" style="background:none;border:1px solid var(--danger);color:var(--danger);padding:1px 8px;margin-left:6px" onclick="deleteUploadedFile('${inputId}','${statusId}','${field}')">삭제</button>`;
+}
 async function handleFileSelect(inputId,statusId,label){
   const input=document.getElementById(inputId);const status=document.getElementById(statusId);
   if(!input||!input.files[0])return;
   status.textContent='업로드 중...';status.className='file-status';
   const url=await uploadToDrive(input.files[0],label);
-  if(url){uploadedFiles[inputId]=url;status.innerHTML='✓ <a href="'+url+'" target="_blank" style="color:var(--success)">업로드 완료</a>';status.className='file-status ok';}
+  if(url){uploadedFiles[inputId]=url;status.innerHTML=fileStatusHtml(url,inputId,statusId);status.className='file-status ok';}
   else{status.textContent='✗ 업로드 실패';status.className='file-status err';}
+}
+async function deleteUploadedFile(inputId,statusId,field){
+  const url=uploadedFiles[inputId]||(field&&selectedId&&(localGet(selectedId)||{})[field])||'';
+  if(!url)return;
+  if(!confirm('업로드된 파일을 삭제할까요?'))return;
+  const status=document.getElementById(statusId);if(status){status.textContent='삭제 중...';status.className='file-status';}
+  // Drive 파일 휴지통으로 (백엔드에 deleteFile 함수가 있어야 실제 삭제 — 없어도 참조는 해제됨)
+  const m=String(url).match(/\/d\/([-\w]+)/);
+  if(m)try{await api('deleteFile',{fileId:m[1]});}catch(e){}
+  delete uploadedFiles[inputId];
+  const inputEl=document.getElementById(inputId);if(inputEl)inputEl.value='';
+  // 시트에 저장돼 있던 참조도 비움
+  if(field&&selectedId){const inf=localGet(selectedId);if(inf&&inf[field]){const backup=inf[field];localUpdate(selectedId,{[field]:''});const r=await api('update',{id:selectedId,[field]:''});if(!r.success){localUpdate(selectedId,{[field]:backup});alert('삭제 실패: '+(r.error||''));renderPanel();return;}}}
+  if(status){status.innerHTML='';status.className='file-status';}
 }
 function localGet(id){return influencers.find(i=>String(i.id)===String(id))}
 function localUpdate(id,changes){const inf=localGet(id);if(inf)Object.assign(inf,changes)}
@@ -934,7 +973,7 @@ function renderPanel(){
     actionHtml+=`<div class="fg"><label>계약 완료일</label><input type="date" id="p-contract-date" value="${v!=='-'?v:today}"></div>
     <div class="fg"><label>계약서 파일</label>
       <input type="file" id="p-contract-file" accept=".pdf,.jpg,.jpeg,.png,.heic" onchange="handleFileSelect('p-contract-file','contract-status','${escJs(fileLabel(inf,'계약서'))}')">
-      <span id="contract-status" class="file-status">${inf.contract_file?`<a href="${inf.contract_file}" target="_blank" style="color:var(--success)">✓ 기존 파일 보기</a>`:''}</span>
+      <span id="contract-status" class="file-status${inf.contract_file?' ok':''}">${inf.contract_file?fileStatusHtml(inf.contract_file,'p-contract-file','contract-status'):''}</span>
     </div>
     <div class="fg"><label>특이사항 (진행 단가 등)</label><textarea id="p-special-note">${inf.special_note||''}</textarea></div>
     <div class="btn-group">
@@ -959,11 +998,11 @@ function renderPanel(){
     <div id="p-files-section" style="${isProductOnly?'display:none':''}">
       <div class="fg"><label>통장사본</label>
         <input type="file" id="p-bankbook-file" accept=".pdf,.jpg,.jpeg,.png,.heic" onchange="handleFileSelect('p-bankbook-file','bankbook-status','${escJs(fileLabel(inf,'통장사본'))}')">
-        <span id="bankbook-status" class="file-status">${inf.bankbook_file?`<a href="${inf.bankbook_file}" target="_blank" style="color:var(--success)">✓ 기존 파일 보기</a>`:''}</span>
+        <span id="bankbook-status" class="file-status${inf.bankbook_file?' ok':''}">${inf.bankbook_file?fileStatusHtml(inf.bankbook_file,'p-bankbook-file','bankbook-status'):''}</span>
       </div>
       <div class="fg"><label>신분증</label>
         <input type="file" id="p-id-file" accept=".pdf,.jpg,.jpeg,.png,.heic" onchange="handleFileSelect('p-id-file','id-status','${escJs(fileLabel(inf,'신분증'))}')">
-        <span id="id-status" class="file-status">${inf.id_file?`<a href="${inf.id_file}" target="_blank" style="color:var(--success)">✓ 기존 파일 보기</a>`:''}</span>
+        <span id="id-status" class="file-status${inf.id_file?' ok':''}">${inf.id_file?fileStatusHtml(inf.id_file,'p-id-file','id-status'):''}</span>
       </div>
     </div>
     <button class="btn btn-primary" onclick="completeProduct()">협찬 완료</button>`;
@@ -1199,8 +1238,9 @@ function cancelSettle(){
 function openHelp(){document.getElementById('help-overlay').classList.add('open')}
 function closeHelp(e){if(!e||e.target===document.getElementById('help-overlay'))document.getElementById('help-overlay').classList.remove('open')}
 
-const APP_VERSION='v2.17';
+const APP_VERSION='v2.18';
 const CHANGELOG=[
+  {v:'v2.18',d:'2026-06-09',items:['업로드한 파일 삭제 버튼 추가(계약서·통장사본·신분증)','업로드 속도 개선: 사진을 업로드 전 자동 축소·압축(최대 1600px) — PDF는 원본 유지']},
   {v:'v2.17',d:'2026-06-09',items:['업로드 파일명을 실명_계약서·실명_통장사본·실명_신분증 형식으로 정리(불필요한 숫자/원본명 제거)']},
   {v:'v2.16',d:'2026-06-09',items:['정산 누락 버그 수정: 여러 명을 한꺼번에 다음 단계로 넘길 때 DM 발송일이 기록되지 않아 정산에서 빠지던 문제 해결','기존에 DM 발송일이 비어 있던 인플루언서 정산 내역 보정']},
   {v:'v2.15',d:'2026-06-09',items:['인플루언서 추가 시 협찬 제품을 드롭다운(목록 선택)으로 변경','마지막에 작성한 제품이 자동으로 선택되도록 고정']},
