@@ -197,7 +197,7 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <button onclick="switchTab('settlement',this)">정산</button>
     </nav>
     <button class="btn btn-outline btn-sm" style="margin-left:auto;white-space:nowrap" onclick="openHelp()">📖 프로그램 사용법</button>
-    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.16</button>
+    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.17</button>
     <span id="sync-badge">동기화 중...</span>
   </header>
 
@@ -451,7 +451,9 @@ async function uploadToDrive(file,label){
     reader.onload=async(e)=>{
       try{
         const base64Data=e.target.result.split(',')[1];
-        const res=await fetch(SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'uploadFile',fileName:label+'_'+Date.now()+'_'+file.name,mimeType:file.type||'application/octet-stream',base64Data})});
+        const ext=(String(file.name).match(/\.[^.\/\\]+$/)||[''])[0];
+        const fileName=label+ext;
+        const res=await fetch(SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'uploadFile',fileName,mimeType:file.type||'application/octet-stream',base64Data})});
         const r=await res.json();resolve(r.success?r.url:null);
       }catch{resolve(null)}
     };
@@ -509,6 +511,8 @@ function renderDashboard(){
 }
 
 function escJs(s){return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'");}
+// 업로드 파일명용: 실명_종류 (실명 없으면 별칭/계정명으로 대체, 파일명 금지문자 제거)
+function fileLabel(inf,type){const nm=String((inf&&(inf.influencer_name||inf.name||inf.instagram_id))||'파일').trim().replace(/[\\/:*?"<>|]/g,'').replace(/\s+/g,'')||'파일';return nm+'_'+type;}
 function productColor(name){let h=0;const s=String(name||'');for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))%360;return h;}
 function getProducts(){
   const fromData=influencers.filter(i=>i.status!=='deleted'&&String(i.product||'').trim()).map(i=>String(i.product).trim());
@@ -929,7 +933,7 @@ function renderPanel(){
     const v=formatDate(inf.contract_sent_date);
     actionHtml+=`<div class="fg"><label>계약 완료일</label><input type="date" id="p-contract-date" value="${v!=='-'?v:today}"></div>
     <div class="fg"><label>계약서 파일</label>
-      <input type="file" id="p-contract-file" accept=".pdf,.jpg,.jpeg,.png,.heic" onchange="handleFileSelect('p-contract-file','contract-status','계약서')">
+      <input type="file" id="p-contract-file" accept=".pdf,.jpg,.jpeg,.png,.heic" onchange="handleFileSelect('p-contract-file','contract-status','${escJs(fileLabel(inf,'계약서'))}')">
       <span id="contract-status" class="file-status">${inf.contract_file?`<a href="${inf.contract_file}" target="_blank" style="color:var(--success)">✓ 기존 파일 보기</a>`:''}</span>
     </div>
     <div class="fg"><label>특이사항 (진행 단가 등)</label><textarea id="p-special-note">${inf.special_note||''}</textarea></div>
@@ -954,11 +958,11 @@ function renderPanel(){
     </div>
     <div id="p-files-section" style="${isProductOnly?'display:none':''}">
       <div class="fg"><label>통장사본</label>
-        <input type="file" id="p-bankbook-file" accept=".pdf,.jpg,.jpeg,.png,.heic" onchange="handleFileSelect('p-bankbook-file','bankbook-status','통장사본')">
+        <input type="file" id="p-bankbook-file" accept=".pdf,.jpg,.jpeg,.png,.heic" onchange="handleFileSelect('p-bankbook-file','bankbook-status','${escJs(fileLabel(inf,'통장사본'))}')">
         <span id="bankbook-status" class="file-status">${inf.bankbook_file?`<a href="${inf.bankbook_file}" target="_blank" style="color:var(--success)">✓ 기존 파일 보기</a>`:''}</span>
       </div>
       <div class="fg"><label>신분증</label>
-        <input type="file" id="p-id-file" accept=".pdf,.jpg,.jpeg,.png,.heic" onchange="handleFileSelect('p-id-file','id-status','신분증')">
+        <input type="file" id="p-id-file" accept=".pdf,.jpg,.jpeg,.png,.heic" onchange="handleFileSelect('p-id-file','id-status','${escJs(fileLabel(inf,'신분증'))}')">
         <span id="id-status" class="file-status">${inf.id_file?`<a href="${inf.id_file}" target="_blank" style="color:var(--success)">✓ 기존 파일 보기</a>`:''}</span>
       </div>
     </div>
@@ -1195,8 +1199,9 @@ function cancelSettle(){
 function openHelp(){document.getElementById('help-overlay').classList.add('open')}
 function closeHelp(e){if(!e||e.target===document.getElementById('help-overlay'))document.getElementById('help-overlay').classList.remove('open')}
 
-const APP_VERSION='v2.16';
+const APP_VERSION='v2.17';
 const CHANGELOG=[
+  {v:'v2.17',d:'2026-06-09',items:['업로드 파일명을 실명_계약서·실명_통장사본·실명_신분증 형식으로 정리(불필요한 숫자/원본명 제거)']},
   {v:'v2.16',d:'2026-06-09',items:['정산 누락 버그 수정: 여러 명을 한꺼번에 다음 단계로 넘길 때 DM 발송일이 기록되지 않아 정산에서 빠지던 문제 해결','기존에 DM 발송일이 비어 있던 인플루언서 정산 내역 보정']},
   {v:'v2.15',d:'2026-06-09',items:['인플루언서 추가 시 협찬 제품을 드롭다운(목록 선택)으로 변경','마지막에 작성한 제품이 자동으로 선택되도록 고정']},
   {v:'v2.14',d:'2026-06-09',items:['모바일 화면 최적화: 인플루언서·정산 목록을 카드형으로 표시(릴스 등 모든 항목이 잘리지 않고 보임), 글자 세로 줄바꿈 해결, 상단 탭 가로 스크롤']},
