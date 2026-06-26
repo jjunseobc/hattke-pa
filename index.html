@@ -197,7 +197,7 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <button onclick="switchTab('settlement',this)">정산</button>
     </nav>
     <button class="btn btn-outline btn-sm" style="margin-left:auto;white-space:nowrap" onclick="openHelp()">📖 프로그램 사용법</button>
-    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.18</button>
+    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.19</button>
     <span id="sync-badge">동기화 중...</span>
   </header>
 
@@ -861,6 +861,7 @@ async function quickAdvance(id,e){
   const next=getNextStageId(Number(inf.stage));if(next===null)return;
   const backup={...inf};
   const ch=next===7?{stage:next,sponsorship_done:'Y'}:{stage:next};
+  if(Number(inf.stage)<=1){ch.dm_sent='Y';ch.dm_sent_date=inf.dm_sent_date||new Date().toISOString().split('T')[0];}
   localUpdate(id,ch);render();if(String(selectedId)===String(id))renderPanel();
   syncStart();const r=await api('update',Object.assign({id},ch));syncEnd();
   if(!r.success){localUpdate(id,backup);render();alert('저장 실패: '+r.error)}
@@ -1238,8 +1239,9 @@ function cancelSettle(){
 function openHelp(){document.getElementById('help-overlay').classList.add('open')}
 function closeHelp(e){if(!e||e.target===document.getElementById('help-overlay'))document.getElementById('help-overlay').classList.remove('open')}
 
-const APP_VERSION='v2.18';
+const APP_VERSION='v2.19';
 const CHANGELOG=[
+  {v:'v2.19',d:'2026-06-26',items:['정산 누락 추가 수정: 대시보드 할 일의 → 버튼(빠른 다음단계)으로 DM 단계로 넘길 때 DM 발송일이 기록되지 않던 문제 해결']},
   {v:'v2.18',d:'2026-06-09',items:['업로드한 파일 삭제 버튼 추가(계약서·통장사본·신분증)','업로드 속도 개선: 사진을 업로드 전 자동 축소·압축(최대 1600px) — PDF는 원본 유지']},
   {v:'v2.17',d:'2026-06-09',items:['업로드 파일명을 실명_계약서·실명_통장사본·실명_신분증 형식으로 정리(불필요한 숫자/원본명 제거)']},
   {v:'v2.16',d:'2026-06-09',items:['정산 누락 버그 수정: 여러 명을 한꺼번에 다음 단계로 넘길 때 DM 발송일이 기록되지 않아 정산에서 빠지던 문제 해결','기존에 DM 발송일이 비어 있던 인플루언서 정산 내역 보정']},
