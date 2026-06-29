@@ -197,7 +197,7 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <button onclick="switchTab('settlement',this)">정산</button>
     </nav>
     <button class="btn btn-outline btn-sm" style="margin-left:auto;white-space:nowrap" onclick="openHelp()">📖 프로그램 사용법</button>
-    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.19</button>
+    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.20</button>
     <span id="sync-badge">동기화 중...</span>
   </header>
 
@@ -248,14 +248,14 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
     </div>
     <div class="sett-box">
       <div class="sett-row"><span>DM 발송 건수</span><span id="dm-count">0건 × 2,000원 = <b>0원</b></span></div>
-      <div class="sett-row"><span>협찬 완료 건수</span><span id="complete-count">0건 × 20,000원 = <b>0원</b></span></div>
+      <div class="sett-row"><span>협찬 성사 건수</span><span id="complete-count">0건 × 20,000원 = <b>0원</b></span></div>
       <div class="sett-row"><span style="font-weight:600">합계</span><span class="sett-total" id="total-pay">0원</span></div>
       <div style="margin-top:12px"><button class="btn btn-outline btn-sm" onclick="copySettlement()">📋 클립보드 복사</button></div>
       <div id="settle-status" style="margin-top:12px"></div>
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>닉네임</th><th>이름</th><th>DM 발송일</th><th>협찬 완료일</th><th>DM</th><th>협찬</th></tr></thead>
+        <thead><tr><th>닉네임</th><th>이름</th><th>DM 발송일</th><th>협찬 성사일</th><th>DM</th><th>협찬</th></tr></thead>
         <tbody id="settlement-table"></tbody>
       </table>
     </div>
@@ -1150,10 +1150,13 @@ async function deleteInfluencer(){
 }
 
 function setThisMonth(){const now=new Date();document.getElementById('settlement-month').value=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;renderSettlement()}
+// 협찬 성사(협찬비 20,000원) 집계: 관리 표와 동일하게 sponsorship_done==='Y' 기준 (거절/삭제 제외)
+function spDone(i){return i.status!=='deleted'&&i.status!=='rejected'&&i.sponsorship_done==='Y';}
+function spDoneDate(i){return i.payment_date||i.ad_setup_date||i.product_sent_date||i.recruited_date||'';}
 function renderSettlement(){
   const month=document.getElementById('settlement-month').value;if(!month)return;
   const dmItems=influencers.filter(i=>i.dm_sent_date&&formatDate(i.dm_sent_date).startsWith(month));
-  const doneItems=influencers.filter(i=>i.status==='done'&&i.payment_date&&formatDate(i.payment_date).startsWith(month));
+  const doneItems=influencers.filter(i=>spDone(i)&&spDoneDate(i)&&formatDate(spDoneDate(i)).startsWith(month));
   const dmPay=dmItems.length*2000,donePay=doneItems.length*20000,total=dmPay+donePay;
   document.getElementById('dm-count').innerHTML=`${dmItems.length}건 × 2,000원 = <b>${dmPay.toLocaleString()}원</b>`;
   document.getElementById('complete-count').innerHTML=`${doneItems.length}건 × 20,000원 = <b>${donePay.toLocaleString()}원</b>`;
@@ -1163,7 +1166,7 @@ function renderSettlement(){
   const allItems=allIds.map(id=>influencers.find(i=>i.id===id)).filter(Boolean);
   const tbody=document.getElementById('settlement-table');
   if(!allItems.length){tbody.innerHTML=`<tr><td colspan="6"><div class="empty">해당 월 내역 없음</div></td></tr>`;return}
-  tbody.innerHTML=allItems.map(i=>{const hDM=i.dm_sent_date&&formatDate(i.dm_sent_date).startsWith(month);const hDone=i.status==='done'&&i.payment_date&&formatDate(i.payment_date).startsWith(month);return`<tr><td class="cell-name">@${i.instagram_id||i.nickname}</td><td data-label="이름">${i.name||'-'}</td><td data-label="DM 발송일">${hDM?formatDate(i.dm_sent_date):'-'}</td><td data-label="협찬 완료일">${hDone?formatDate(i.payment_date):'-'}</td><td data-label="DM">${hDM?'2,000원':'-'}</td><td data-label="협찬" style="white-space:nowrap">${hDone?'20,000원':'-'}<button class="settle-del" title="이 내역을 정산에서 제외" onclick="removeSettleEntry('${i.id}')">✕</button></td></tr>`}).join('');
+  tbody.innerHTML=allItems.map(i=>{const hDM=i.dm_sent_date&&formatDate(i.dm_sent_date).startsWith(month);const hDone=spDone(i)&&spDoneDate(i)&&formatDate(spDoneDate(i)).startsWith(month);return`<tr><td class="cell-name">@${i.instagram_id||i.nickname}</td><td data-label="이름">${i.name||'-'}</td><td data-label="DM 발송일">${hDM?formatDate(i.dm_sent_date):'-'}</td><td data-label="협찬 성사일">${hDone?formatDate(spDoneDate(i)):'-'}</td><td data-label="DM">${hDM?'2,000원':'-'}</td><td data-label="협찬" style="white-space:nowrap">${hDone?'20,000원':'-'}<button class="settle-del" title="이 내역을 정산에서 제외" onclick="removeSettleEntry('${i.id}')">✕</button></td></tr>`}).join('');
 }
 const ADMIN_ID='hattke',ADMIN_PW='hattke3531';
 let isAdmin=false;try{isAdmin=sessionStorage.getItem('hattke_admin')==='1';}catch(e){}
@@ -1208,7 +1211,7 @@ function renderSettleStatus(month){
 }
 function computeSettleTotal(month){
   const dm=influencers.filter(i=>i.dm_sent_date&&formatDate(i.dm_sent_date).startsWith(month)).length;
-  const done=influencers.filter(i=>i.status==='done'&&i.payment_date&&formatDate(i.payment_date).startsWith(month)).length;
+  const done=influencers.filter(i=>spDone(i)&&spDoneDate(i)&&formatDate(spDoneDate(i)).startsWith(month)).length;
   return dm*2000+done*20000;
 }
 function startSettleComplete(){
@@ -1239,8 +1242,9 @@ function cancelSettle(){
 function openHelp(){document.getElementById('help-overlay').classList.add('open')}
 function closeHelp(e){if(!e||e.target===document.getElementById('help-overlay'))document.getElementById('help-overlay').classList.remove('open')}
 
-const APP_VERSION='v2.19';
+const APP_VERSION='v2.20';
 const CHANGELOG=[
+  {v:'v2.20',d:'2026-06-26',items:['정산 협찬비 집계 수정: 협찬 성사(sponsorship_done) 시점에 협찬비 20,000원이 정산에 잡히도록 변경(기존엔 입금 완료/done 단계라야 잡힘) — 관리 표의 성사수당과 일치']},
   {v:'v2.19',d:'2026-06-26',items:['정산 누락 추가 수정: 대시보드 할 일의 → 버튼(빠른 다음단계)으로 DM 단계로 넘길 때 DM 발송일이 기록되지 않던 문제 해결']},
   {v:'v2.18',d:'2026-06-09',items:['업로드한 파일 삭제 버튼 추가(계약서·통장사본·신분증)','업로드 속도 개선: 사진을 업로드 전 자동 축소·압축(최대 1600px) — PDF는 원본 유지']},
   {v:'v2.17',d:'2026-06-09',items:['업로드 파일명을 실명_계약서·실명_통장사본·실명_신분증 형식으로 정리(불필요한 숫자/원본명 제거)']},
@@ -1353,13 +1357,13 @@ async function removeSettleEntry(id){
   const inf=localGet(id);if(!inf)return;
   const month=document.getElementById('settlement-month').value;
   const hDM=inf.dm_sent_date&&formatDate(inf.dm_sent_date).startsWith(month);
-  const hDone=inf.status==='done'&&inf.payment_date&&formatDate(inf.payment_date).startsWith(month);
+  const hDone=spDone(inf)&&spDoneDate(inf)&&formatDate(spDoneDate(inf)).startsWith(month);
   if(!hDM&&!hDone)return;
-  const parts=[];if(hDM)parts.push('DM 발송일');if(hDone)parts.push('협찬 완료일');
-  if(!confirm('@'+(inf.instagram_id||inf.nickname)+' 의 '+month+' 정산 내역을 삭제할까요?\n('+parts.join('·')+' 기록이 지워져 정산 집계에서 빠집니다)'))return;
+  const parts=[];if(hDM)parts.push('DM 발송');if(hDone)parts.push('협찬 성사');
+  if(!confirm('@'+(inf.instagram_id||inf.nickname)+' 의 '+month+' 정산 내역을 삭제할까요?\n('+parts.join('·')+' 수당이 정산 집계에서 빠집니다)'))return;
   const changes={};
   if(hDM)changes.dm_sent_date='';
-  if(hDone)changes.payment_date='';
+  if(hDone)changes.sponsorship_done='N';
   const backup={...inf};
   localUpdate(id,changes);renderSettlement();
   syncStart();const r=await api('update',Object.assign({id},changes));syncEnd();
@@ -1368,9 +1372,9 @@ async function removeSettleEntry(id){
 function copySettlement(){
   const month=document.getElementById('settlement-month').value;
   const dmCount=influencers.filter(i=>i.dm_sent_date&&formatDate(i.dm_sent_date).startsWith(month)).length;
-  const doneCount=influencers.filter(i=>i.status==='done'&&i.payment_date&&formatDate(i.payment_date).startsWith(month)).length;
+  const doneCount=influencers.filter(i=>spDone(i)&&spDoneDate(i)&&formatDate(spDoneDate(i)).startsWith(month)).length;
   const total=(dmCount*2000)+(doneCount*20000);
-  navigator.clipboard.writeText(`[${month} 정산]\nDM 발송: ${dmCount}건 × 2,000원 = ${(dmCount*2000).toLocaleString()}원\n협찬 완료: ${doneCount}건 × 20,000원 = ${(doneCount*20000).toLocaleString()}원\n합계: ${total.toLocaleString()}원`).then(()=>alert('클립보드에 복사됐습니다.'));
+  navigator.clipboard.writeText(`[${month} 정산]\nDM 발송: ${dmCount}건 × 2,000원 = ${(dmCount*2000).toLocaleString()}원\n협찬 성사: ${doneCount}건 × 20,000원 = ${(doneCount*20000).toLocaleString()}원\n합계: ${total.toLocaleString()}원`).then(()=>alert('클립보드에 복사됐습니다.'));
 }
 </script>
 </body>
