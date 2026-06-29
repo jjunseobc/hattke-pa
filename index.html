@@ -197,7 +197,7 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <button onclick="switchTab('settlement',this)">정산</button>
     </nav>
     <button class="btn btn-outline btn-sm" style="margin-left:auto;white-space:nowrap" onclick="openHelp()">📖 프로그램 사용법</button>
-    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.20</button>
+    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.21</button>
     <span id="sync-badge">동기화 중...</span>
   </header>
 
@@ -517,7 +517,7 @@ window.onload=()=>{
   setThisMonth();showLoading();initTouchDrag();
   const vb=document.getElementById('version-btn');if(vb)vb.textContent=APP_VERSION;
   api('getAll').then(r=>{hideLoading();if(r.success){influencers=r.data.filter(d=>['active','rejected','done'].includes(String(d.status||'').trim()));render()}});
-  api('getSettlements').then(r=>{if(r.success&&r.data){settlements=r.data;if(document.getElementById('tab-settlement').classList.contains('active'))renderSettlement();}});
+  api('getSettlements').then(r=>{if(r.success&&r.data){settlements=normalizeSettlements(r.data);if(document.getElementById('tab-settlement').classList.contains('active'))renderSettlement();}});
   api('getGuides').then(r=>{if(r.success&&r.data){guides=r.data;if(document.getElementById('tab-guide').classList.contains('active')){renderGuideTabs();renderGuideList();}}else{const el=document.getElementById('guide-list');if(el)el.innerHTML='<div class="empty">가이드를 불러오지 못했습니다. (백엔드 재배포 필요할 수 있음)</div>';}});
 };
 function switchTab(name,btn){
@@ -1160,7 +1160,13 @@ function renderSettlement(){
   const dmPay=dmItems.length*2000,donePay=doneItems.length*20000,total=dmPay+donePay;
   document.getElementById('dm-count').innerHTML=`${dmItems.length}건 × 2,000원 = <b>${dmPay.toLocaleString()}원</b>`;
   document.getElementById('complete-count').innerHTML=`${doneItems.length}건 × 20,000원 = <b>${donePay.toLocaleString()}원</b>`;
-  document.getElementById('total-pay').textContent=total.toLocaleString()+'원';
+  // 정산 완료된 달이면 합계는 '미정산 잔액'(누적 - 정산액)으로 표시 → 전액 정산 시 0원
+  const rec=getSettleRecord(month);const settledAmt=rec?Number(rec.amount)||0:0;
+  const remaining=rec?Math.max(0,total-settledAmt):total;
+  const totalEl=document.getElementById('total-pay');
+  totalEl.textContent=remaining.toLocaleString()+'원';
+  const totalLabel=totalEl.parentElement?totalEl.parentElement.querySelector('span'):null;
+  if(totalLabel)totalLabel.textContent=rec?'미정산 잔액':'합계';
   renderSettleStatus(month);
   const allIds=[...new Set([...dmItems.map(i=>i.id),...doneItems.map(i=>i.id)])];
   const allItems=allIds.map(id=>influencers.find(i=>i.id===id)).filter(Boolean);
@@ -1192,6 +1198,10 @@ function submitAdminLogin(){
     document.getElementById('admin-err').textContent='아이디 또는 비밀번호가 올바르지 않습니다.';
   }
 }
+// 시트가 "2026-06"을 날짜로 자동 변환해 저장하는 문제 보정 — 월 키/날짜를 표준 문자열로 정규화
+function normMonth(k){const s=String(k||'').trim();if(/^\d{4}-\d{2}/.test(s))return s.slice(0,7);const d=new Date(s);return isNaN(d.getTime())?s:d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
+function normDate(s){const t=String(s||'').trim();if(!t)return'';if(/^\d{4}-\d{2}-\d{2}/.test(t))return t.slice(0,10);const d=new Date(t);return isNaN(d.getTime())?t:d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function normalizeSettlements(data){const out={};Object.keys(data||{}).forEach(k=>{const m=normMonth(k);const rec=data[k]||{};out[m]={date:normDate(rec.date),amount:Number(rec.amount)||0};});return out;}
 function getSettleRecord(month){return settlements[month]||null;}
 function renderSettleStatus(month){
   const ss=document.getElementById('settle-status');if(!ss)return;
@@ -1242,8 +1252,9 @@ function cancelSettle(){
 function openHelp(){document.getElementById('help-overlay').classList.add('open')}
 function closeHelp(e){if(!e||e.target===document.getElementById('help-overlay'))document.getElementById('help-overlay').classList.remove('open')}
 
-const APP_VERSION='v2.20';
+const APP_VERSION='v2.21';
 const CHANGELOG=[
+  {v:'v2.21',d:'2026-06-29',items:['정산 완료 처리 시 합계가 미정산 잔액(0원)으로 표시되도록 수정','정산 완료 배너가 새로고침 후에도 유지되도록 월 키 정규화 버그 수정']},
   {v:'v2.20',d:'2026-06-26',items:['정산 협찬비 집계 수정: 협찬 성사(sponsorship_done) 시점에 협찬비 20,000원이 정산에 잡히도록 변경(기존엔 입금 완료/done 단계라야 잡힘) — 관리 표의 성사수당과 일치']},
   {v:'v2.19',d:'2026-06-26',items:['정산 누락 추가 수정: 대시보드 할 일의 → 버튼(빠른 다음단계)으로 DM 단계로 넘길 때 DM 발송일이 기록되지 않던 문제 해결']},
   {v:'v2.18',d:'2026-06-09',items:['업로드한 파일 삭제 버튼 추가(계약서·통장사본·신분증)','업로드 속도 개선: 사진을 업로드 전 자동 축소·압축(최대 1600px) — PDF는 원본 유지']},
