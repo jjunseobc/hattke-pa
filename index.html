@@ -197,7 +197,7 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <button onclick="switchTab('settlement',this)">정산</button>
     </nav>
     <button class="btn btn-outline btn-sm" style="margin-left:auto;white-space:nowrap" onclick="openHelp()">📖 프로그램 사용법</button>
-    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.21</button>
+    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.22</button>
     <span id="sync-badge">동기화 중...</span>
   </header>
 
@@ -249,7 +249,8 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
     <div class="sett-box">
       <div class="sett-row"><span>DM 발송 건수</span><span id="dm-count">0건 × 2,000원 = <b>0원</b></span></div>
       <div class="sett-row"><span>협찬 성사 건수</span><span id="complete-count">0건 × 20,000원 = <b>0원</b></span></div>
-      <div class="sett-row"><span style="font-weight:600">합계</span><span class="sett-total" id="total-pay">0원</span></div>
+      <div class="sett-row" id="settled-row" style="display:none"><span style="font-weight:600;color:#22c55e">정산 잔액</span><span style="font-weight:700;color:#22c55e" id="settled-amt">0원</span></div>
+      <div class="sett-row"><span style="font-weight:600" id="total-label">합계</span><span class="sett-total" id="total-pay">0원</span></div>
       <div style="margin-top:12px"><button class="btn btn-outline btn-sm" onclick="copySettlement()">📋 클립보드 복사</button></div>
       <div id="settle-status" style="margin-top:12px"></div>
     </div>
@@ -1160,13 +1161,14 @@ function renderSettlement(){
   const dmPay=dmItems.length*2000,donePay=doneItems.length*20000,total=dmPay+donePay;
   document.getElementById('dm-count').innerHTML=`${dmItems.length}건 × 2,000원 = <b>${dmPay.toLocaleString()}원</b>`;
   document.getElementById('complete-count').innerHTML=`${doneItems.length}건 × 20,000원 = <b>${donePay.toLocaleString()}원</b>`;
-  // 정산 완료된 달이면 합계는 '미정산 잔액'(누적 - 정산액)으로 표시 → 전액 정산 시 0원
+  // 정산 완료된 달이면 정산 잔액(정산액)을 따로 보여주고, 합계는 '미정산 잔액'(누적 - 정산액) → 전액 정산 시 0원
   const rec=getSettleRecord(month);const settledAmt=rec?Number(rec.amount)||0:0;
   const remaining=rec?Math.max(0,total-settledAmt):total;
-  const totalEl=document.getElementById('total-pay');
-  totalEl.textContent=remaining.toLocaleString()+'원';
-  const totalLabel=totalEl.parentElement?totalEl.parentElement.querySelector('span'):null;
-  if(totalLabel)totalLabel.textContent=rec?'미정산 잔액':'합계';
+  const settledRow=document.getElementById('settled-row');
+  if(rec){settledRow.style.display='';document.getElementById('settled-amt').textContent=settledAmt.toLocaleString()+'원';}
+  else{settledRow.style.display='none';}
+  document.getElementById('total-label').textContent=rec?'미정산 잔액':'합계';
+  document.getElementById('total-pay').textContent=remaining.toLocaleString()+'원';
   renderSettleStatus(month);
   const allIds=[...new Set([...dmItems.map(i=>i.id),...doneItems.map(i=>i.id)])];
   const allItems=allIds.map(id=>influencers.find(i=>i.id===id)).filter(Boolean);
@@ -1252,8 +1254,9 @@ function cancelSettle(){
 function openHelp(){document.getElementById('help-overlay').classList.add('open')}
 function closeHelp(e){if(!e||e.target===document.getElementById('help-overlay'))document.getElementById('help-overlay').classList.remove('open')}
 
-const APP_VERSION='v2.21';
+const APP_VERSION='v2.22';
 const CHANGELOG=[
+  {v:'v2.22',d:'2026-06-29',items:['정산 탭에 정산 잔액(이미 정산한 금액) 행을 미정산 잔액 위에 추가 표시']},
   {v:'v2.21',d:'2026-06-29',items:['정산 완료 처리 시 합계가 미정산 잔액(0원)으로 표시되도록 수정','정산 완료 배너가 새로고침 후에도 유지되도록 월 키 정규화 버그 수정']},
   {v:'v2.20',d:'2026-06-26',items:['정산 협찬비 집계 수정: 협찬 성사(sponsorship_done) 시점에 협찬비 20,000원이 정산에 잡히도록 변경(기존엔 입금 완료/done 단계라야 잡힘) — 관리 표의 성사수당과 일치']},
   {v:'v2.19',d:'2026-06-26',items:['정산 누락 추가 수정: 대시보드 할 일의 → 버튼(빠른 다음단계)으로 DM 단계로 넘길 때 DM 발송일이 기록되지 않던 문제 해결']},
