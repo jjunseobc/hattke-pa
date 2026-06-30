@@ -197,7 +197,7 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <button onclick="switchTab('settlement',this)">정산</button>
     </nav>
     <button class="btn btn-outline btn-sm" style="margin-left:auto;white-space:nowrap" onclick="openHelp()">📖 프로그램 사용법</button>
-    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.23</button>
+    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.24</button>
     <span id="sync-badge">동기화 중...</span>
   </header>
 
@@ -1046,10 +1046,11 @@ function copyInput(inputId,e){
 // 은행/계좌 정보: localStorage 캐시(기기별) + 시트 저장(컬럼 있으면 영구)
 function getBankCache(id){try{return (JSON.parse(localStorage.getItem('hattke_bank')||'{}'))[id]||null;}catch(e){return null;}}
 function saveBankCache(id,bank,acc){try{const o=JSON.parse(localStorage.getItem('hattke_bank')||'{}');o[id]={bank:bank||'',acc:acc||''};localStorage.setItem('hattke_bank',JSON.stringify(o));}catch(e){}}
-function saveBankField(){
+function saveBankField(skipLearn){
   const bank=(document.getElementById('p-bank')?.value||'').trim();
   const acc=(document.getElementById('p-account')?.value||'').trim();
   saveBankCache(selectedId,bank,acc);
+  if(!skipLearn)learnBankPrefix(acc,bank); // 사용자가 직접 확정한 계좌앞자리↔은행만 학습 → 다음 OCR부터 자동 교정
   localUpdate(selectedId,{bank_name:bank,account_number:acc});
   api('update',{id:selectedId,bank_name:bank,account_number:acc}); // 컬럼 있으면 영구 저장(없으면 무시됨)
 }
@@ -1060,15 +1061,48 @@ function loadTesseract(){
   _tessLoad=new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';s.onload=res;s.onerror=()=>rej(new Error('OCR 라이브러리 로드 실패'));document.head.appendChild(s);});
   return _tessLoad;
 }
+// 은행별 별칭(키워드) — 텍스트에서 더 길고 구체적인 키워드가 우선 매칭됨
+const BANK_ALIASES={
+  '토스뱅크':['토스뱅크','토스','toss'],
+  '카카오뱅크':['카카오뱅크','카카오','kakao'],
+  '케이뱅크':['케이뱅크','케이 뱅크','k뱅크','kbank'],
+  '국민은행':['국민은행','국민','kb국민','kb'],
+  '신한은행':['신한은행','신한','shinhan'],
+  '우리은행':['우리은행','우리','woori'],
+  '하나은행':['하나은행','하나','keb','hana'],
+  '농협':['농협은행','농협','nh','nonghyup'],
+  '기업은행':['기업은행','기업','ibk'],
+  'SC제일은행':['sc제일','제일은행','sc'],
+  '씨티은행':['씨티','citi'],
+  '새마을금고':['새마을금고','새마을'],
+  '우체국':['우체국'],
+  '부산은행':['부산은행','부산'],'대구은행':['대구은행','대구','iM뱅크','im뱅크'],'광주은행':['광주은행','광주'],
+  '전북은행':['전북은행','전북'],'경남은행':['경남은행','경남'],
+  '수협':['수협은행','수협'],'신협':['신협'],'산업은행':['산업은행','kdb'],'저축은행':['저축은행']
+};
+// 계좌번호 앞자리 → 은행 (디지털뱅크는 앞자리가 고유해 가장 신뢰도 높음). 사용자 교정으로 학습됨
+const ACC_PREFIX_BUILTIN={'1000':'토스뱅크','3333':'카카오뱅크'};
+function getLearnedPrefix(){try{return JSON.parse(localStorage.getItem('hattke_bank_prefix')||'{}');}catch(e){return{};}}
+function learnBankPrefix(account,bank){const acc=String(account||'').replace(/\D/g,'');if(acc.length<4||!bank)return;try{const o=getLearnedPrefix();o[acc.slice(0,4)]=bank;localStorage.setItem('hattke_bank_prefix',JSON.stringify(o));}catch(e){}}
+function detectBank(text,account){
+  const acc=String(account||'').replace(/\D/g,'');
+  // 1) 학습된 앞자리 > 내장 앞자리 (계좌번호 기반이 가장 정확)
+  const learned=getLearnedPrefix();
+  if(acc.length>=4&&learned[acc.slice(0,4)])return learned[acc.slice(0,4)];
+  for(const p in ACC_PREFIX_BUILTIN){if(acc.startsWith(p))return ACC_PREFIX_BUILTIN[p];}
+  // 2) 텍스트 키워드 — 가장 길고 구체적인 키워드 매칭 우선
+  const t=String(text||'').toLowerCase();
+  let best='',bestLen=0;
+  for(const bank in BANK_ALIASES){for(const kw of BANK_ALIASES[bank]){const k=kw.toLowerCase();if(t.includes(k)&&k.length>bestLen){best=bank;bestLen=k.length;}}}
+  return best;
+}
 function parseBankInfo(text){
   const t=String(text||'');
-  const BANKS=['국민','신한','우리','하나','농협','기업','카카오뱅크','토스뱅크','케이뱅크','SC제일','씨티','새마을금고','우체국','부산','대구','광주','전북','경남','수협','신협','산업','저축은행'];
-  let bank='';for(const b of BANKS){if(t.includes(b)){bank=(b.endsWith('뱅크')||b==='우체국')?b:b+'은행';break;}}
   // 숫자 오인식 보정 후 하이픈 포함 긴 숫자열 → 계좌번호 후보
   const cleaned=t.replace(/[Oo]/g,'0').replace(/[lI|]/g,'1').replace(/[ ]/g,'');
   let acc='';const cand=cleaned.match(/\d[\d-]{8,}\d/g);
   if(cand){cand.sort((a,b)=>b.replace(/\D/g,'').length-a.replace(/\D/g,'').length);acc=cand[0];}
-  return {bank,account:acc};
+  return {bank:detectBank(t,acc),account:acc};
 }
 async function ocrBankbook(){
   const inf=localGet(selectedId);if(!inf)return;
@@ -1089,9 +1123,9 @@ async function ocrBankbook(){
     const parsed=parseBankInfo(out.data.text||'');
     if(document.getElementById('p-bank')&&parsed.bank)document.getElementById('p-bank').value=parsed.bank;
     if(document.getElementById('p-account')&&parsed.account)document.getElementById('p-account').value=parsed.account;
-    saveBankField();
+    saveBankField(true); // OCR 자동 결과로는 학습하지 않음(틀릴 수 있음)
     status.className='file-status ok';
-    status.textContent=(parsed.bank||parsed.account)?'✓ 추출 완료 — 통장사본과 대조해 확인/수정하세요.':'인식된 값이 없습니다. 통장사본을 보고 직접 입력해주세요.';
+    status.textContent=(parsed.bank||parsed.account)?'✓ 추출 완료 — 통장사본과 대조해 확인/수정하세요. (수정하면 다음부터 자동 교정)':'인식된 값이 없습니다. 통장사본을 보고 직접 입력해주세요.';
   }catch(e){status.className='file-status err';status.textContent='추출 실패: '+(e.message||e);}
   btn.disabled=false;
 }
@@ -1322,8 +1356,9 @@ function cancelSettle(){
 function openHelp(){document.getElementById('help-overlay').classList.add('open')}
 function closeHelp(e){if(!e||e.target===document.getElementById('help-overlay'))document.getElementById('help-overlay').classList.remove('open')}
 
-const APP_VERSION='v2.23';
+const APP_VERSION='v2.24';
 const CHANGELOG=[
+  {v:'v2.24',d:'2026-06-29',items:['통장 OCR 은행 인식 개선: 토스/카카오/케이뱅크 등 별칭 인식 + 계좌번호 앞자리로 은행 판별','OCR 교정 학습: 은행/계좌를 직접 수정하면 계좌 앞자리↔은행을 기억해 다음부터 자동 교정']},
   {v:'v2.23',d:'2026-06-29',items:['광고세팅/입금 단계에 입금 정보 표시: 통장사본·신분증 파일 바로 보기(복사 X), 은행명·계좌번호 입력/복사','통장사본 이미지에서 은행·계좌번호 자동 추출(OCR) 기능 추가']},
   {v:'v2.22',d:'2026-06-29',items:['정산 탭에 정산 잔액(이미 정산한 금액) 행을 미정산 잔액 위에 추가 표시']},
   {v:'v2.21',d:'2026-06-29',items:['정산 완료 처리 시 합계가 미정산 잔액(0원)으로 표시되도록 수정','정산 완료 배너가 새로고침 후에도 유지되도록 월 키 정규화 버그 수정']},
