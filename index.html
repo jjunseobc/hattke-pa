@@ -197,7 +197,7 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <button onclick="switchTab('settlement',this)">정산</button>
     </nav>
     <button class="btn btn-outline btn-sm" style="margin-left:auto;white-space:nowrap" onclick="openHelp()">📖 프로그램 사용법</button>
-    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.22</button>
+    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.23</button>
     <span id="sync-badge">동기화 중...</span>
   </header>
 
@@ -1010,10 +1010,22 @@ function renderPanel(){
     <button class="btn btn-primary" onclick="completeProduct()">협찬 완료</button>`;
   }else if(stage===7){
     const vp=formatDate(inf.payment_date);
+    const bc=getBankCache(selectedId)||{};
+    const bankVal=inf.bank_name||bc.bank||'';const accVal=inf.account_number||bc.acc||'';
+    const isPO=inf.product_only==='Y';
+    const fileLink=(url,txt)=>url?`<a class="link-btn" href="${url}" target="_blank" style="padding:4px 9px">${txt} ↗</a>`:`<span class="text-muted">없음</span>`;
     actionHtml+=`<p class="text-muted" style="margin-bottom:10px">광고 세팅 및 인플루언서 입금을 진행해주세요.</p>
     <div class="fg"><label>광고코드 (복사용)</label>
-      <div class="copy-row"><input type="text" value="${inf.ad_code||''}" readonly><button class="btn btn-outline btn-sm" onclick="copyText('${inf.ad_code||''}')">복사</button></div>
+      <div class="copy-row"><input type="text" value="${escHtml(inf.ad_code)}" readonly><button class="btn btn-outline btn-sm" onclick="copyText('${escJs(inf.ad_code||'')}')">복사</button></div>
     </div>
+    <div class="section-title">입금 정보</div>
+    <div class="fg"><label>실명 (예금주 확인)</label><div class="copy-row"><input type="text" value="${escHtml(inf.influencer_name)}" readonly><button class="btn btn-outline btn-sm" onclick="copyText('${escJs(inf.influencer_name||'')}')">복사</button></div></div>
+    ${isPO?`<p class="text-muted" style="margin-bottom:10px">📦 제품만 협찬 — 통장사본/신분증 없음</p>`:`<div class="info-row" style="margin-bottom:10px">📎 ${fileLink(inf.bankbook_file,'통장사본 보기')} ${fileLink(inf.id_file,'신분증 보기')}</div>`}
+    <div class="fg"><label>은행명</label><div class="copy-row"><input type="text" id="p-bank" value="${escHtml(bankVal)}" placeholder="예: 국민은행" onchange="saveBankField()"><button class="btn btn-outline btn-sm" onclick="copyInput('p-bank',event)">복사</button></div></div>
+    <div class="fg"><label>계좌번호</label><div class="copy-row"><input type="text" id="p-account" value="${escHtml(accVal)}" placeholder="계좌번호" onchange="saveBankField()"><button class="btn btn-outline btn-sm" onclick="copyInput('p-account',event)">복사</button></div></div>
+    ${isPO?'':`<button id="ocr-btn" class="btn btn-outline btn-sm btn-block" style="margin-bottom:4px" onclick="ocrBankbook()">🔍 통장사본에서 은행·계좌 자동 추출</button>
+    <span id="ocr-status" class="file-status"></span>`}
+    <hr class="divider">
     <div class="fg"><label>입금일</label><input type="date" id="p-payment-date" value="${vp!=='-'?vp:today}"></div>
     <button class="btn btn-success" onclick="completeAll()">✓ 광고세팅 및 입금 완료</button>`;
   }else{
@@ -1026,6 +1038,62 @@ function toggleProductOnly(checked){const sec=document.getElementById('p-files-s
 function copyText(text){
   if(!text||text==='-')return;
   navigator.clipboard.writeText(text).then(()=>{const btn=event.target;const orig=btn.textContent;btn.textContent='✓복사됨';setTimeout(()=>btn.textContent=orig,1500)});
+}
+function copyInput(inputId,e){
+  const el=document.getElementById(inputId);if(!el||!el.value.trim())return;
+  navigator.clipboard.writeText(el.value.trim()).then(()=>{const btn=e.target;const orig=btn.textContent;btn.textContent='✓복사됨';setTimeout(()=>btn.textContent=orig,1500)});
+}
+// 은행/계좌 정보: localStorage 캐시(기기별) + 시트 저장(컬럼 있으면 영구)
+function getBankCache(id){try{return (JSON.parse(localStorage.getItem('hattke_bank')||'{}'))[id]||null;}catch(e){return null;}}
+function saveBankCache(id,bank,acc){try{const o=JSON.parse(localStorage.getItem('hattke_bank')||'{}');o[id]={bank:bank||'',acc:acc||''};localStorage.setItem('hattke_bank',JSON.stringify(o));}catch(e){}}
+function saveBankField(){
+  const bank=(document.getElementById('p-bank')?.value||'').trim();
+  const acc=(document.getElementById('p-account')?.value||'').trim();
+  saveBankCache(selectedId,bank,acc);
+  localUpdate(selectedId,{bank_name:bank,account_number:acc});
+  api('update',{id:selectedId,bank_name:bank,account_number:acc}); // 컬럼 있으면 영구 저장(없으면 무시됨)
+}
+let _tessLoad=null;
+function loadTesseract(){
+  if(window.Tesseract)return Promise.resolve();
+  if(_tessLoad)return _tessLoad;
+  _tessLoad=new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';s.onload=res;s.onerror=()=>rej(new Error('OCR 라이브러리 로드 실패'));document.head.appendChild(s);});
+  return _tessLoad;
+}
+function parseBankInfo(text){
+  const t=String(text||'');
+  const BANKS=['국민','신한','우리','하나','농협','기업','카카오뱅크','토스뱅크','케이뱅크','SC제일','씨티','새마을금고','우체국','부산','대구','광주','전북','경남','수협','신협','산업','저축은행'];
+  let bank='';for(const b of BANKS){if(t.includes(b)){bank=(b.endsWith('뱅크')||b==='우체국')?b:b+'은행';break;}}
+  // 숫자 오인식 보정 후 하이픈 포함 긴 숫자열 → 계좌번호 후보
+  const cleaned=t.replace(/[Oo]/g,'0').replace(/[lI|]/g,'1').replace(/[ ]/g,'');
+  let acc='';const cand=cleaned.match(/\d[\d-]{8,}\d/g);
+  if(cand){cand.sort((a,b)=>b.replace(/\D/g,'').length-a.replace(/\D/g,'').length);acc=cand[0];}
+  return {bank,account:acc};
+}
+async function ocrBankbook(){
+  const inf=localGet(selectedId);if(!inf)return;
+  if(!inf.bankbook_file){alert('통장사본 파일이 없습니다.');return;}
+  const fileId=(String(inf.bankbook_file).match(/\/d\/([-\w]+)/)||[])[1];
+  if(!fileId){alert('통장사본 파일 주소를 인식할 수 없습니다.');return;}
+  const btn=document.getElementById('ocr-btn'),status=document.getElementById('ocr-status');
+  btn.disabled=true;status.className='file-status';status.textContent='통장사본 불러오는 중...';
+  try{
+    const r=await api('getFileBase64',{fileId});
+    if(!r||!r.success)throw new Error((r&&r.error)||'파일 로드 실패 (백엔드 재배포 필요할 수 있음)');
+    if(!/^image\//.test(r.mimeType||'')){status.className='file-status err';status.textContent='이미지(JPG/PNG) 통장사본만 자동 추출됩니다. PDF는 직접 입력해주세요.';btn.disabled=false;return;}
+    status.textContent='OCR 준비 중... (처음엔 수십 초 걸릴 수 있어요)';
+    await loadTesseract();
+    const dataUrl='data:'+r.mimeType+';base64,'+r.base64;
+    status.textContent='이미지 분석 중... 0%';
+    const out=await Tesseract.recognize(dataUrl,'kor+eng',{logger:m=>{if(m.status==='recognizing text'&&status)status.textContent='이미지 분석 중... '+Math.round((m.progress||0)*100)+'%';}});
+    const parsed=parseBankInfo(out.data.text||'');
+    if(document.getElementById('p-bank')&&parsed.bank)document.getElementById('p-bank').value=parsed.bank;
+    if(document.getElementById('p-account')&&parsed.account)document.getElementById('p-account').value=parsed.account;
+    saveBankField();
+    status.className='file-status ok';
+    status.textContent=(parsed.bank||parsed.account)?'✓ 추출 완료 — 통장사본과 대조해 확인/수정하세요.':'인식된 값이 없습니다. 통장사본을 보고 직접 입력해주세요.';
+  }catch(e){status.className='file-status err';status.textContent='추출 실패: '+(e.message||e);}
+  btn.disabled=false;
 }
 
 async function saveBasicInfo(){
@@ -1254,8 +1322,9 @@ function cancelSettle(){
 function openHelp(){document.getElementById('help-overlay').classList.add('open')}
 function closeHelp(e){if(!e||e.target===document.getElementById('help-overlay'))document.getElementById('help-overlay').classList.remove('open')}
 
-const APP_VERSION='v2.22';
+const APP_VERSION='v2.23';
 const CHANGELOG=[
+  {v:'v2.23',d:'2026-06-29',items:['광고세팅/입금 단계에 입금 정보 표시: 통장사본·신분증 파일 바로 보기(복사 X), 은행명·계좌번호 입력/복사','통장사본 이미지에서 은행·계좌번호 자동 추출(OCR) 기능 추가']},
   {v:'v2.22',d:'2026-06-29',items:['정산 탭에 정산 잔액(이미 정산한 금액) 행을 미정산 잔액 위에 추가 표시']},
   {v:'v2.21',d:'2026-06-29',items:['정산 완료 처리 시 합계가 미정산 잔액(0원)으로 표시되도록 수정','정산 완료 배너가 새로고침 후에도 유지되도록 월 키 정규화 버그 수정']},
   {v:'v2.20',d:'2026-06-26',items:['정산 협찬비 집계 수정: 협찬 성사(sponsorship_done) 시점에 협찬비 20,000원이 정산에 잡히도록 변경(기존엔 입금 완료/done 단계라야 잡힘) — 관리 표의 성사수당과 일치']},
