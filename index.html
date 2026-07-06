@@ -197,7 +197,7 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <button onclick="switchTab('settlement',this)">정산</button>
     </nav>
     <button class="btn btn-outline btn-sm" style="margin-left:auto;white-space:nowrap" onclick="openHelp()">📖 프로그램 사용법</button>
-    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.25</button>
+    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.26</button>
     <span id="sync-badge">동기화 중...</span>
   </header>
 
@@ -1127,10 +1127,14 @@ function parseBankInfo(text){
 // 신분증에서 주민번호·이름 추출
 function parseIdInfo(text){
   const t=String(text||'');
-  const cleaned=t.replace(/[Oo]/g,'0').replace(/[lI|]/g,'1');
-  let rrn='';const m=cleaned.match(/(\d{6})[\s.\-]?([1-4]\d{6})/);
+  // 주민번호 영역 숫자 오인식 보정(추출용) — 표시엔 영향 없음
+  const norm=t.replace(/[OoDQ]/g,'0').replace(/[lI|!ijㅣ]/g,'1').replace(/[Ss]/g,'5').replace(/[Bb]/g,'8').replace(/[Zz]/g,'2').replace(/[gq]/g,'9').replace(/[Tt]/g,'7');
+  let rrn='';
+  let m=norm.match(/(\d{6})\s*[-—_.·]?\s*([1-4]\d{6})/); // 표준: 6자리-(성별1~4)6자리
+  if(!m)m=norm.match(/(\d{6})\s*[-—_.·]?\s*(\d{7})/);     // 완화: 뒤 7자리 무엇이든
+  if(!m){const only=norm.replace(/[^\d]/g,'');const mm=only.match(/(\d{6})([1-4]\d{6})/);if(mm)m=mm;} // 최후: 숫자만 이어붙여 13자리
   if(m)rrn=m[1]+'-'+m[2];
-  let name='';const STOP=['주민등록증','운전면허','운전면허증','대한민국','성명','주소','발급','경찰청','도지사','시장','군수','구청장','재발급','유효기간'];
+  let name='';const STOP=['주민등록증','운전면허','운전면허증','대한민국','성명','주소','발급','경찰청','도지사','시장','군수','구청장','재발급','유효기간','이름'];
   const cands=t.match(/[가-힣]{2,4}/g)||[];
   for(const n of cands){if(!STOP.includes(n)){name=n;break;}}
   return {rrn,name};
@@ -1164,19 +1168,31 @@ async function ocrExtract(){
         if(p.bank||p.account)got.push('은행·계좌');}
     }
     // 신분증 → 주민번호/이름
+    let idMissRrn=false;
     if(inf.id_file){
       const txt=await ocrFile(inf.id_file,status,'신분증');
       if(txt!=null){const p=parseIdInfo(txt);
+        console.log('[신분증 OCR 원문]\n'+txt); // 주민번호 인식 실패 시 진단용
         if(p.rrn&&document.getElementById('p-rrn'))document.getElementById('p-rrn').value=p.rrn;
         if(p.name&&!(inf.influencer_name||'').trim()){
           const rn=document.getElementById('p-realname');if(rn)rn.value=p.name;
           localUpdate(selectedId,{influencer_name:p.name});api('update',{id:selectedId,influencer_name:p.name});
         }
-        if(p.rrn||p.name)got.push('주민번호'+(p.name?'·이름':''));}
+        if(p.rrn||p.name)got.push('주민번호'+(p.name?'·이름':''));
+        if(!p.rrn)idMissRrn=true;
+      }
     }
     saveBankField(true); // OCR 자동 결과로는 학습하지 않음(틀릴 수 있음)
     status.className='file-status ok';
-    status.textContent=got.length?`✓ 추출 완료 (${got.join(', ')}) — 원본과 대조해 확인/수정하세요. (수정하면 다음부터 자동 교정)`:'인식된 값이 없습니다. 원본을 보고 직접 입력해주세요.';
+    if(got.length){
+      let msg=`✓ 추출 완료 (${got.join(', ')}) — 원본과 대조해 확인/수정하세요.`;
+      if(idMissRrn)msg+=' (주민번호는 인식 실패 — 신분증 보고 직접 입력)';
+      status.textContent=msg;
+    }else if(!inf.id_file){
+      status.textContent='통장사본만 추출했습니다. 신분증 파일이 없어 주민번호는 추출되지 않았어요.';
+    }else{
+      status.textContent='인식된 값이 없습니다. 원본을 보고 직접 입력해주세요. (주민번호가 마스킹된 신분증은 추출 불가)';
+    }
   }catch(e){status.className='file-status err';status.textContent='추출 실패: '+(e.message||e);}
   btn.disabled=false;
 }
@@ -1407,8 +1423,9 @@ function cancelSettle(){
 function openHelp(){document.getElementById('help-overlay').classList.add('open')}
 function closeHelp(e){if(!e||e.target===document.getElementById('help-overlay'))document.getElementById('help-overlay').classList.remove('open')}
 
-const APP_VERSION='v2.25';
+const APP_VERSION='v2.26';
 const CHANGELOG=[
+  {v:'v2.26',d:'2026-07-06',items:['신분증 주민등록번호 인식률 개선(OCR 오인식 보정·형식 완화) 및 실패 원인 안내 메시지 추가']},
   {v:'v2.25',d:'2026-07-06',items:['광고세팅/입금 단계에 계약서 보기 추가 + 3개 파일 전체 다운로드 버튼','자동 추출 시 신분증에서 주민등록번호·이름도 함께 추출(주민번호는 기기 캐시에만 저장)','계좌번호 복사 시 - 기호 없이 숫자만 복사']},
   {v:'v2.24',d:'2026-06-29',items:['통장 OCR 은행 인식 개선: 토스/카카오/케이뱅크 등 별칭 인식 + 계좌번호 앞자리로 은행 판별','OCR 교정 학습: 은행/계좌를 직접 수정하면 계좌 앞자리↔은행을 기억해 다음부터 자동 교정']},
   {v:'v2.23',d:'2026-06-29',items:['광고세팅/입금 단계에 입금 정보 표시: 통장사본·신분증 파일 바로 보기(복사 X), 은행명·계좌번호 입력/복사','통장사본 이미지에서 은행·계좌번호 자동 추출(OCR) 기능 추가']},
