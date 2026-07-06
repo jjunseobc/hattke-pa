@@ -197,7 +197,7 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <button onclick="switchTab('settlement',this)">정산</button>
     </nav>
     <button class="btn btn-outline btn-sm" style="margin-left:auto;white-space:nowrap" onclick="openHelp()">📖 프로그램 사용법</button>
-    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.27</button>
+    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.28</button>
     <span id="sync-badge">동기화 중...</span>
   </header>
 
@@ -1116,12 +1116,12 @@ function detectBank(text,account){
   for(const bank in BANK_ALIASES){for(const kw of BANK_ALIASES[bank]){const k=kw.toLowerCase();if(t.includes(k)&&k.length>bestLen){best=bank;bestLen=k.length;}}}
   return best;
 }
-function parseBankInfo(text,digits){
+function parseBankInfo(text){
   const t=String(text||'');
-  // 숫자 전용 패스 우선, 없으면 본문에서 보정 후 계좌번호 후보 탐색
-  const src=(String(digits||'')+'\n'+t).replace(/[Oo]/g,'0').replace(/[lI|]/g,'1');
-  let acc='';const cand=src.match(/\d[\d-]{8,}\d/g);
-  if(cand){cand.sort((a,b)=>b.replace(/\D/g,'').length-a.replace(/\D/g,'').length);acc=cand[0].replace(/-{2,}/g,'-').replace(/^-|-$/g,'');}
+  // (이전 방식) 원본 전체 인식 텍스트에서 하이픈 포함 긴 숫자열 → 계좌번호 후보
+  const cleaned=t.replace(/[Oo]/g,'0').replace(/[lI|]/g,'1').replace(/[ ]/g,'');
+  let acc='';const cand=cleaned.match(/\d[\d-]{8,}\d/g);
+  if(cand){cand.sort((a,b)=>b.replace(/\D/g,'').length-a.replace(/\D/g,'').length);acc=cand[0];}
   return {bank:detectBank(t,acc),account:acc};
 }
 // 신분증에서 주민번호·이름 추출 (digits: 숫자 전용 OCR 패스)
@@ -1160,25 +1160,29 @@ function preprocessForOcr(dataUrl){
   });
 }
 // 파일(Drive) 하나를 OCR — {text(전체), digits(숫자전용 패스)} 반환. 이미지 아니면 null
-async function ocrFile(fileUrl,status,label){
+// opts.preprocess: 확대·흑백·대비 전처리 / opts.digitsPass: 숫자 전용 2차 패스
+async function ocrFile(fileUrl,status,label,opts){
+  opts=opts||{};
   const fileId=(String(fileUrl).match(/\/d\/([-\w]+)/)||[])[1];
   if(!fileId)return null;
   if(status)status.textContent=label+' 불러오는 중...';
   const r=await api('getFileBase64',{fileId});
   if(!r||!r.success)throw new Error((r&&r.error)||'파일 로드 실패 (백엔드 재배포 필요할 수 있음)');
   if(!/^image\//.test(r.mimeType||'')){if(status)status.textContent=label+'은 이미지가 아니어서 건너뜀';return null;}
-  const img=await preprocessForOcr('data:'+r.mimeType+';base64,'+r.base64);
-  if(status)status.textContent=label+' 분석 중... (1/2 전체)';
-  const full=await Tesseract.recognize(img,'kor+eng',{logger:m=>{if(m.status==='recognizing text'&&status)status.textContent=label+' 분석 중(1/2)... '+Math.round((m.progress||0)*100)+'%';}});
-  // 숫자 전용 패스: 숫자·하이픈만 인식하도록 강제 → 계좌/주민번호 정확도 ↑
+  const rawUrl='data:'+r.mimeType+';base64,'+r.base64;
+  const imgInput=opts.preprocess?await preprocessForOcr(rawUrl):rawUrl;
+  if(status)status.textContent=label+' 분석 중...'+(opts.digitsPass?' (1/2)':'');
+  const full=await Tesseract.recognize(imgInput,'kor+eng',{logger:m=>{if(m.status==='recognizing text'&&status)status.textContent=label+' 분석 중'+(opts.digitsPass?'(1/2)':'')+'... '+Math.round((m.progress||0)*100)+'%';}});
   let digits='';
-  try{
-    if(status)status.textContent=label+' 숫자 분석 중... (2/2)';
-    const w=await Tesseract.createWorker('eng');
-    await w.setParameters({tessedit_char_whitelist:'0123456789-'});
-    const dg=await w.recognize(img);await w.terminate();
-    digits=dg.data.text||'';
-  }catch(e){}
+  if(opts.digitsPass){
+    try{
+      if(status)status.textContent=label+' 숫자 분석 중... (2/2)';
+      const w=await Tesseract.createWorker('eng');
+      await w.setParameters({tessedit_char_whitelist:'0123456789-'});
+      const dg=await w.recognize(imgInput);await w.terminate();
+      digits=dg.data.text||'';
+    }catch(e){}
+  }
   return {text:full.data.text||'',digits};
 }
 async function ocrExtract(){
@@ -1189,19 +1193,19 @@ async function ocrExtract(){
   const got=[];
   try{
     await loadTesseract();
-    // 통장사본 → 은행/계좌
+    // 통장사본 → 은행/계좌 (이전 방식: 원본 이미지 + 전체 인식만)
     if(inf.bankbook_file){
-      const res=await ocrFile(inf.bankbook_file,status,'통장사본');
-      if(res!=null){const p=parseBankInfo(res.text,res.digits);
-        console.log('[통장사본 OCR]\n본문:\n'+res.text+'\n숫자패스:\n'+res.digits);
+      const res=await ocrFile(inf.bankbook_file,status,'통장사본',{preprocess:false,digitsPass:false});
+      if(res!=null){const p=parseBankInfo(res.text);
+        console.log('[통장사본 OCR 본문]\n'+res.text);
         if(p.bank&&document.getElementById('p-bank'))document.getElementById('p-bank').value=p.bank;
         if(p.account&&document.getElementById('p-account'))document.getElementById('p-account').value=p.account;
         if(p.bank||p.account)got.push('은행·계좌');}
     }
-    // 신분증 → 주민번호/이름
+    // 신분증 → 주민번호/이름 (전처리 + 숫자 전용 패스)
     let idMissRrn=false;
     if(inf.id_file){
-      const res=await ocrFile(inf.id_file,status,'신분증');
+      const res=await ocrFile(inf.id_file,status,'신분증',{preprocess:true,digitsPass:true});
       if(res!=null){const p=parseIdInfo(res.text,res.digits);
         console.log('[신분증 OCR]\n본문:\n'+res.text+'\n숫자패스:\n'+res.digits); // 주민번호 인식 실패 시 진단용
         if(p.rrn&&document.getElementById('p-rrn'))document.getElementById('p-rrn').value=p.rrn;
@@ -1454,8 +1458,9 @@ function cancelSettle(){
 function openHelp(){document.getElementById('help-overlay').classList.add('open')}
 function closeHelp(e){if(!e||e.target===document.getElementById('help-overlay'))document.getElementById('help-overlay').classList.remove('open')}
 
-const APP_VERSION='v2.27';
+const APP_VERSION='v2.28';
 const CHANGELOG=[
+  {v:'v2.28',d:'2026-07-06',items:['계좌번호 추출을 이전 방식(원본 인식)으로 복원 — 통장 인식률 회복. 신분증(주민번호)만 전처리+숫자패스 유지']},
   {v:'v2.27',d:'2026-07-06',items:['OCR 인식률 개선: 이미지 확대·흑백·대비 전처리 + 숫자 전용 인식 패스 추가(계좌·주민번호 정확도 향상)']},
   {v:'v2.26',d:'2026-07-06',items:['신분증 주민등록번호 인식률 개선(OCR 오인식 보정·형식 완화) 및 실패 원인 안내 메시지 추가']},
   {v:'v2.25',d:'2026-07-06',items:['광고세팅/입금 단계에 계약서 보기 추가 + 3개 파일 전체 다운로드 버튼','자동 추출 시 신분증에서 주민등록번호·이름도 함께 추출(주민번호는 기기 캐시에만 저장)','계좌번호 복사 시 - 기호 없이 숫자만 복사']},
