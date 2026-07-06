@@ -197,7 +197,7 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <button onclick="switchTab('settlement',this)">정산</button>
     </nav>
     <button class="btn btn-outline btn-sm" style="margin-left:auto;white-space:nowrap" onclick="openHelp()">📖 프로그램 사용법</button>
-    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.29</button>
+    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.30</button>
     <span id="sync-badge">동기화 중...</span>
   </header>
 
@@ -1239,10 +1239,17 @@ async function notionWrite(){
   if(!realname){alert('실명(예금주)이 없습니다. 먼저 실명을 입력/추출해주세요.');return;}
   if(!confirm(`노션 '정산 내역'에 아래 내용으로 기입할까요?\n\n· 프리랜서명: ${realname}\n· 계약법인: 드래프터\n· 업무내용: 인플루언서\n· 정산금액: 50,000원\n· 담당자: 송준섭\n· 진행일·지급예정일: 오늘\n· 확인여부: 체크`))return;
   const btn=document.getElementById('notion-btn'),st=document.getElementById('notion-status');
-  btn.disabled=true;st.className='file-status';st.textContent='노션에 기입 중...';
-  const r=await api('notionSettlement',{realname});
-  if(r&&r.success){st.className='file-status ok';st.innerHTML='✓ 노션 기입 완료'+(r.url?` — <a href="${r.url}" target="_blank" style="color:var(--success)">노션에서 보기 ↗</a>`:'');}
-  else{st.className='file-status err';st.textContent='기입 실패: '+((r&&r.error)||'알 수 없음');}
+  btn.disabled=true;st.className='file-status';st.textContent='노션에 기입 중... (이 PC의 노션 브리지 사용)';
+  // 이 PC의 로컬 노션 브리지(start-bridge.bat) 호출 → 로그인된 크롬으로 노션 기입
+  try{
+    const res=await fetch('http://localhost:8787/notion?realname='+encodeURIComponent(realname));
+    const r=await res.json();
+    if(r&&r.success){st.className='file-status ok';st.innerHTML='✓ 노션 기입 완료'+(r.url?` — <a href="${r.url}" target="_blank" style="color:var(--success)">노션에서 보기 ↗</a>`:'');}
+    else{st.className='file-status err';st.textContent='기입 실패: '+((r&&r.error)||'알 수 없음');}
+  }catch(e){
+    st.className='file-status err';
+    st.innerHTML='노션 브리지에 연결 실패 — 이 PC에서 <b>start-bridge.bat</b>을 실행했는지, 크롬에 노션 로그인돼 있는지 확인하세요.';
+  }
   btn.disabled=false;
 }
 
@@ -1472,8 +1479,9 @@ function cancelSettle(){
 function openHelp(){document.getElementById('help-overlay').classList.add('open')}
 function closeHelp(e){if(!e||e.target===document.getElementById('help-overlay'))document.getElementById('help-overlay').classList.remove('open')}
 
-const APP_VERSION='v2.29';
+const APP_VERSION='v2.30';
 const CHANGELOG=[
+  {v:'v2.30',d:'2026-07-06',items:["노션 기입 버튼을 로컬 브리지 방식으로 변경 — 이 PC의 로그인된 크롬으로 '정산 내역'에 실제 기입(관리자 승인 불필요)"]},
   {v:'v2.29',d:'2026-07-06',items:["광고세팅/입금 단계에 노션 '정산 내역' 기입 버튼 추가 — 실명만 가져와 나머지(계약법인·업무내용·정산금액·담당자·날짜 등)는 자동 기입"]},
   {v:'v2.28',d:'2026-07-06',items:['계좌번호 추출을 이전 방식(원본 인식)으로 복원 — 통장 인식률 회복. 신분증(주민번호)만 전처리+숫자패스 유지']},
   {v:'v2.27',d:'2026-07-06',items:['OCR 인식률 개선: 이미지 확대·흑백·대비 전처리 + 숫자 전용 인식 패스 추가(계좌·주민번호 정확도 향상)']},
