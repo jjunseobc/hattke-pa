@@ -197,7 +197,7 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <button onclick="switchTab('settlement',this)">정산</button>
     </nav>
     <button class="btn btn-outline btn-sm" style="margin-left:auto;white-space:nowrap" onclick="openHelp()">📖 프로그램 사용법</button>
-    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.30</button>
+    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.31</button>
     <span id="sync-badge">동기화 중...</span>
   </header>
 
@@ -1032,6 +1032,8 @@ function renderPanel(){
     <hr class="divider">
     <button id="notion-btn" class="btn btn-outline btn-sm btn-block" style="margin-bottom:4px" onclick="notionWrite()">📝 노션 '정산 내역'에 기입</button>
     <span id="notion-status" class="file-status" style="margin-bottom:8px;display:block"></span>
+    <button id="flex-btn" class="btn btn-outline btn-sm btn-block" style="margin-bottom:4px" onclick="flexWrite()">🧾 Flex 용역비 지급요청 제출</button>
+    <span id="flex-status" class="file-status" style="margin-bottom:8px;display:block"></span>
     <div class="fg"><label>입금일</label><input type="date" id="p-payment-date" value="${vp!=='-'?vp:today}"></div>
     <button class="btn btn-success" onclick="completeAll()">✓ 광고세팅 및 입금 완료</button>`;
   }else{
@@ -1250,6 +1252,30 @@ async function notionWrite(){
     st.className='file-status err';
     st.innerHTML='노션 브리지에 연결 실패 — 이 PC에서 <b>start-bridge.bat</b>을 실행했는지, 크롬에 노션 로그인돼 있는지 확인하세요.';
   }
+  btn.disabled=false;
+}
+async function flexWrite(){
+  const inf=localGet(selectedId);if(!inf)return;
+  const realname=(inf.influencer_name||'').trim();
+  const bc=getBankCache(selectedId)||{};
+  const rrn=((document.getElementById('p-rrn')?.value)||bc.rrn||'').trim();
+  const bank=((document.getElementById('p-bank')?.value)||inf.bank_name||bc.bank||'').trim();
+  const account=(((document.getElementById('p-account')?.value)||inf.account_number||bc.acc||'')).replace(/\D/g,'');
+  if(!realname||!rrn||!bank||!account){alert('Flex 제출에는 실명·주민번호·은행명·계좌번호가 모두 필요합니다.\n먼저 자동 추출/입력 후 다시 시도해주세요.');return;}
+  const fid=u=>((String(u||'').match(/\/d\/([-\w]+)/)||[])[1]);
+  const files=[];
+  if(inf.bankbook_file)files.push({fileId:fid(inf.bankbook_file),label:realname+'_통장사본'});
+  if(inf.id_file)files.push({fileId:fid(inf.id_file),label:realname+'_신분증'});
+  if(inf.contract_file)files.push({fileId:fid(inf.contract_file),label:realname+'_계약서'});
+  if(!confirm(`Flex '프리랜서 용역비 지급 요청'을 실제로 제출(결재요청)할까요?\n\n· 프리랜서명/예금주: ${realname}\n· 주민번호: ${rrn}\n· 은행/계좌: ${bank} / ${account}\n· 첨부파일: ${files.length}건\n· 용역비(세후): 48,350\n\n※ 결재자(김다슬·경영지원팀)에게 요청이 전송됩니다.`))return;
+  const btn=document.getElementById('flex-btn'),st=document.getElementById('flex-status');
+  btn.disabled=true;st.className='file-status';st.textContent='Flex 작성·첨부·제출 중... (30초~1분, 이 PC 브리지 사용)';
+  try{
+    const res=await fetch('http://localhost:8787/flex',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({realname,rrn,bank,account,files})});
+    const r=await res.json();
+    if(r&&r.success){st.className='file-status ok';st.textContent='✓ Flex 결재 요청 완료';}
+    else{st.className='file-status err';st.textContent='실패/확인 필요: '+((r&&r.error)||'알 수 없음')+' — Flex에서 상태를 확인하세요.';}
+  }catch(e){st.className='file-status err';st.innerHTML='브리지 연결 실패 — 이 PC에서 <b>start-bridge.bat</b> 실행 + 크롬에 Flex 로그인 확인.';}
   btn.disabled=false;
 }
 
@@ -1479,8 +1505,9 @@ function cancelSettle(){
 function openHelp(){document.getElementById('help-overlay').classList.add('open')}
 function closeHelp(e){if(!e||e.target===document.getElementById('help-overlay'))document.getElementById('help-overlay').classList.remove('open')}
 
-const APP_VERSION='v2.30';
+const APP_VERSION='v2.31';
 const CHANGELOG=[
+  {v:'v2.31',d:'2026-07-06',items:["Flex '프리랜서 용역비 지급요청' 자동 제출 버튼 추가 — 실명·주민번호·은행·계좌+파일3개 자동 입력/첨부 후 결재 요청(로컬 브리지 방식)"]},
   {v:'v2.30',d:'2026-07-06',items:["노션 기입 버튼을 로컬 브리지 방식으로 변경 — 이 PC의 로그인된 크롬으로 '정산 내역'에 실제 기입(관리자 승인 불필요)"]},
   {v:'v2.29',d:'2026-07-06',items:["광고세팅/입금 단계에 노션 '정산 내역' 기입 버튼 추가 — 실명만 가져와 나머지(계약법인·업무내용·정산금액·담당자·날짜 등)는 자동 기입"]},
   {v:'v2.28',d:'2026-07-06',items:['계좌번호 추출을 이전 방식(원본 인식)으로 복원 — 통장 인식률 회복. 신분증(주민번호)만 전처리+숫자패스 유지']},
