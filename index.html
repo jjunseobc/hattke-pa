@@ -193,11 +193,12 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
     <nav>
       <button class="active" onclick="switchTab('dashboard',this)">대시보드</button>
       <button onclick="switchTab('management',this)">인플루언서 관리</button>
+      <button onclick="switchTab('finder',this)">인플루언서 찾기</button>
       <button onclick="switchTab('guide',this)">인플루언서 DM 가이드</button>
       <button onclick="switchTab('settlement',this)">정산</button>
     </nav>
     <button class="btn btn-outline btn-sm" style="margin-left:auto;white-space:nowrap" onclick="openHelp()">📖 프로그램 사용법</button>
-    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.31</button>
+    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.32</button>
     <span id="sync-badge">동기화 중...</span>
   </header>
 
@@ -259,6 +260,44 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
         <thead><tr><th>닉네임</th><th>이름</th><th>DM 발송일</th><th>협찬 성사일</th><th>DM</th><th>협찬</th></tr></thead>
         <tbody id="settlement-table"></tbody>
       </table>
+    </div>
+  </div>
+
+  <div id="tab-finder" class="tab">
+    <div class="text-muted" style="margin-bottom:12px">💡 원하는 결의 인스타 인플루언서를 찾아 검토 후 <b>리스팅 목록에 추가</b>하거나 <b>DM</b>을 보냅니다. 이 PC에서 <b>브리지 실행 + 인스타 로그인</b>이 필요합니다. <button class="btn btn-outline btn-sm" onclick="instaLogin()">인스타 로그인 열기</button></div>
+    <div class="sett-box">
+      <div class="filter-tabs" style="margin-bottom:12px">
+        <div class="filter-tab active" id="fmode-seed" onclick="setFindMode('seed')">기존 인플루언서로 비슷한 결 찾기</div>
+        <div class="filter-tab" id="fmode-tag" onclick="setFindMode('tag')">해시태그로 찾기</div>
+      </div>
+      <div id="find-seed-box">
+        <div class="text-muted" style="margin-bottom:6px">hattke-pa에 등록된 인플루언서 <b id="seed-count">0</b>명을 시드로 사용해 비슷한 결을 찾습니다. (거절/완료 포함 전체 계정명)</div>
+      </div>
+      <div id="find-tag-box" style="display:none">
+        <div class="fg"><label>해시태그 (쉼표로 구분)</label><input type="text" id="find-hashtags" placeholder="예: 육아맘, 자기관리, 데일리룩"></div>
+      </div>
+      <div class="btn-group" style="margin:10px 0">
+        <div class="fg" style="margin:0"><label>팔로워 최소</label><input type="number" id="find-fmin" value="1000" style="width:110px"></div>
+        <div class="fg" style="margin:0"><label>팔로워 최대</label><input type="number" id="find-fmax" value="150000" style="width:110px"></div>
+        <div class="fg" style="margin:0"><label>최대 후보 수</label><input type="number" id="find-max" value="40" style="width:100px"></div>
+      </div>
+      <button class="btn btn-primary" id="find-btn" onclick="instaFind()">🔍 인플루언서 찾기</button>
+      <span id="find-status" class="text-muted" style="margin-left:10px"></span>
+      <pre id="find-log" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px;font-size:11px;max-height:120px;overflow:auto;margin-top:8px;white-space:pre-wrap"></pre>
+    </div>
+
+    <div id="find-results" style="display:none">
+      <div class="toolbar">
+        <span id="find-count" style="font-weight:600"></span>
+        <button class="btn btn-outline btn-sm" onclick="instaSelectAll(true)">전체선택</button>
+        <button class="btn btn-outline btn-sm" onclick="instaSelectAll(false)">해제</button>
+        <button class="btn btn-success btn-sm" onclick="instaAddToListing()" style="margin-left:auto">＋ 선택 항목 리스팅에 추가</button>
+        <button class="btn btn-primary btn-sm" onclick="openDmModal()">📨 선택 항목 DM</button>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th style="width:32px"><input type="checkbox" id="find-select-all" onchange="instaSelectAll(this.checked)"></th><th>계정명</th><th>이름</th><th>팔로워</th><th>릴스</th><th>프로필</th></tr></thead>
+        <tbody id="find-table"></tbody>
+      </table></div>
     </div>
   </div>
 
@@ -357,6 +396,22 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeAddModal()">취소</button>
       <button class="btn btn-primary" onclick="submitAdd()">추가</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="dm-overlay" onclick="closeDmModal(event)">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:560px">
+    <h3>협업 제안 DM — <span id="dm-target-count"></span>명</h3>
+    <p class="text-muted" style="margin-bottom:8px">{name}=상대 이름, {brand}=해트케 로 자동 치환됩니다. <b>[보내지않음]</b> 줄부터 아래는 메모(발송 제외).</p>
+    <div class="fg"><label>DM 문구</label><textarea id="dm-template" style="min-height:220px"></textarea></div>
+    <div class="fg"><label>실제 발송 인원 제한</label><input type="number" id="dm-limit" value="10" style="width:100px"> <span class="text-muted">명 (계정 보호를 위해 소량 권장 · 한 명당 90초)</span></div>
+    <span id="dm-status" class="text-muted"></span>
+    <pre id="dm-log" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px;font-size:11px;max-height:140px;overflow:auto;margin-top:8px;white-space:pre-wrap"></pre>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeDmModal()">닫기</button>
+      <button class="btn btn-outline" id="dm-preview-btn" onclick="instaDm(false)">미리보기(발송X)</button>
+      <button class="btn btn-danger" id="dm-send-btn" onclick="instaDm(true)">⚠️ 실제 발송</button>
     </div>
   </div>
 </div>
@@ -527,6 +582,7 @@ function switchTab(name,btn){
   document.getElementById('tab-'+name).classList.add('active');btn.classList.add('active');closePanel();
   if(name==='settlement')renderSettlement();
   if(name==='guide'){renderGuideTabs();renderGuideList();}
+  if(name==='finder')renderSeedCount();
 }
 function render(){renderDashboard();renderProductTabs();refreshProductDatalist();renderFilterTabs();renderList()}
 
@@ -1279,6 +1335,106 @@ async function flexWrite(){
   btn.disabled=false;
 }
 
+// ── 인플루언서 찾기 (로컬 브리지 → 인스타 툴킷) ──
+const BRIDGE='http://localhost:8787';
+let findMode='seed', findResults=[];
+const DM_DEFAULT=`안녕하세요 {name}님, '{brand}'에서 협업 제안 드립니다! 🥰
+
+최근 제작해주신 매력적인 콘텐츠를 인상 깊게 보았습니다!
+{name}님 채널과 시너지를 낼 파트너를 찾던 중 연락드려요.
+파트너십 형태로 진행을 희망하며, 아래와 같이 안내드립니다 :D
+--------
+- 파트너십 광고(PA)
+제작해주신 콘텐츠 게시글 자체를 광고 집행하여, 계정 내 유입과 확산 시너지 발생
+
+- 자유로운 창작
+가이드를 가볍게 참조하시어, {name}님의 채널 톤에 맞게 제작해주시면 됩니다 :D
+--------
+확인 후 편하게 말씀 주시면 제작료 등 상세 협의 도와드리겠습니다!
+
+좋은 파트너십으로 이어질 수 있기를 기대하겠습니다. 감사합니다!
+
+– {brand} 드림 –`;
+function setFindMode(m){findMode=m;document.getElementById('fmode-seed').classList.toggle('active',m==='seed');document.getElementById('fmode-tag').classList.toggle('active',m==='tag');document.getElementById('find-seed-box').style.display=m==='seed'?'':'none';document.getElementById('find-tag-box').style.display=m==='tag'?'':'none';}
+function renderSeedCount(){const el=document.getElementById('seed-count');if(el)el.textContent=influencers.filter(i=>String(i.instagram_id||i.nickname||'').trim()).length;}
+async function instaLogin(){try{await fetch(BRIDGE+'/insta/login');alert('인스타 로그인 창을 열었습니다. 그 크롬 창에서 인스타 계정으로 로그인하세요(처음 1회).');}catch(e){alert('브리지에 연결 실패 — 이 PC에서 start-bridge.bat 실행 확인');}}
+async function pollJob(jobId,logEl,statusEl,onDone){
+  try{
+    const r=await(await fetch(BRIDGE+'/insta/status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jobId})})).json();
+    if(logEl&&r.log){logEl.style.display='block';logEl.textContent=r.log;logEl.scrollTop=logEl.scrollHeight;}
+    if(r.status==='running'){setTimeout(()=>pollJob(jobId,logEl,statusEl,onDone),2500);return;}
+    if(r.status==='done')onDone(r.result);
+    else{if(statusEl){statusEl.textContent='실패: '+(r.error||'알 수 없음');}onDone(null,r.error);}
+  }catch(e){if(statusEl)statusEl.textContent='브리지 연결 끊김';onDone(null,e.message);}
+}
+async function instaFind(){
+  const btn=document.getElementById('find-btn'),st=document.getElementById('find-status'),log=document.getElementById('find-log');
+  const body={mode:findMode,followersMin:+document.getElementById('find-fmin').value||0,followersMax:+document.getElementById('find-fmax').value||999999999,maxCandidates:+document.getElementById('find-max').value||40};
+  if(findMode==='seed'){body.seeds=[...new Set(influencers.map(i=>String(i.instagram_id||i.nickname||'').trim()).filter(Boolean))];if(!body.seeds.length)return alert('시드로 쓸 등록 인플루언서가 없습니다. 해시태그 모드를 쓰세요.');}
+  else{body.hashtags=(document.getElementById('find-hashtags').value||'').split(',').map(s=>s.trim()).filter(Boolean);if(!body.hashtags.length)return alert('해시태그를 입력하세요.');}
+  btn.disabled=true;st.textContent='찾는 중... (수 분 걸립니다. 창을 켜두세요)';log.style.display='none';log.textContent='';
+  try{
+    const r=await(await fetch(BRIDGE+'/insta/find',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})).json();
+    if(!r.jobId){st.textContent='실패: '+(r.error||'');btn.disabled=false;return;}
+    pollJob(r.jobId,log,st,(result,err)=>{btn.disabled=false;if(!result){st.textContent='실패: '+(err||'결과 없음');return;}st.textContent='완료 — '+result.count+'명';renderFindResults(result.list||[]);});
+  }catch(e){st.textContent='브리지 연결 실패 — start-bridge.bat 실행 확인';btn.disabled=false;}
+}
+function renderFindResults(list){
+  findResults=list;
+  document.getElementById('find-results').style.display=list.length?'block':'none';
+  document.getElementById('find-count').textContent=list.length+'명 발견';
+  document.getElementById('find-table').innerHTML=list.map((r,idx)=>`<tr>
+    <td onclick="event.stopPropagation()"><input type="checkbox" class="find-cb" data-idx="${idx}" checked></td>
+    <td><b>@${escHtml(r.username)}</b></td><td>${escHtml(r.fullName||'')}</td>
+    <td class="muted">${r.followers?formatFollowers(r.followers):'-'}</td>
+    <td class="muted">${r.reelsCount??'-'}</td>
+    <td><a class="link-btn" href="${r.url}" target="_blank">프로필↗</a></td></tr>`).join('');
+}
+function instaSelectAll(ch){document.querySelectorAll('.find-cb').forEach(c=>c.checked=ch);const sa=document.getElementById('find-select-all');if(sa)sa.checked=ch;}
+function getSelectedFinds(){return[...document.querySelectorAll('.find-cb')].filter(c=>c.checked).map(c=>findResults[+c.dataset.idx]).filter(Boolean);}
+async function instaAddToListing(){
+  const sel=getSelectedFinds();if(!sel.length)return alert('추가할 인플루언서를 선택하세요.');
+  const prod=(currentProduct!=='all'&&currentProduct!=='__none__')?currentProduct:getLastProduct();
+  if(!confirm(sel.length+'명을 리스팅 목록에 추가할까요?'+(prod?'\n제품: '+prod:'')))return;
+  const existing=new Set(influencers.map(i=>String(i.instagram_id||'').toLowerCase()));
+  let added=0,skipped=0;
+  for(const r of sel){
+    if(existing.has(String(r.username).toLowerCase())){skipped++;continue;}
+    const tempId='temp_'+Date.now()+'_'+added;
+    const item={id:tempId,_opt:true,instagram_id:r.username,nickname:r.username,name:r.fullName||'',followers:r.followers||'',reels_url:r.url||'',recruited_date:new Date().toISOString().split('T')[0],product:prod||'',stage:0,status:'active',memo:''};
+    localAdd(item);added++;
+    api('add',item).then(res=>{if(res&&res.success)localUpdate(tempId,{id:res.id,_opt:false});});
+  }
+  render();
+  alert(`추가 완료: ${added}명${skipped?` · 이미 있어 건너뜀 ${skipped}명`:''}`);
+}
+function openDmModal(){
+  const sel=getSelectedFinds();if(!sel.length)return alert('DM 보낼 인플루언서를 선택하세요.');
+  document.getElementById('dm-target-count').textContent=sel.length;
+  const t=document.getElementById('dm-template');if(!t.value)t.value=DM_DEFAULT;
+  document.getElementById('dm-status').textContent='';document.getElementById('dm-log').style.display='none';
+  document.getElementById('dm-overlay').classList.add('open');
+}
+function closeDmModal(e){if(!e||e.target===document.getElementById('dm-overlay'))document.getElementById('dm-overlay').classList.remove('open');}
+async function instaDm(send){
+  const sel=getSelectedFinds();if(!sel.length)return;
+  const template=document.getElementById('dm-template').value;
+  const limit=+document.getElementById('dm-limit').value||10;
+  if(send&&!confirm(`실제로 DM을 발송합니다.\n대상 ${sel.length}명 중 최대 ${limit}명, 한 명당 90초 간격.\n인스타 계정 정지 위험이 있습니다. 진행할까요?`))return;
+  const st=document.getElementById('dm-status'),log=document.getElementById('dm-log');
+  document.getElementById('dm-preview-btn').disabled=true;document.getElementById('dm-send-btn').disabled=true;
+  st.textContent=send?'발송 중... (오래 걸립니다. 창 켜두세요)':'미리보기 확인 중...';log.style.display='none';log.textContent='';
+  try{
+    const targets=sel.map(r=>({username:r.username,name:(r.fullName||r.username).split(/[|｜/,()]/)[0].trim()}));
+    const r=await(await fetch(BRIDGE+'/insta/dm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({targets,template,send,limit})})).json();
+    if(!r.jobId){st.textContent='실패: '+(r.error||'');document.getElementById('dm-preview-btn').disabled=false;document.getElementById('dm-send-btn').disabled=false;return;}
+    pollJob(r.jobId,log,st,(result,err)=>{document.getElementById('dm-preview-btn').disabled=false;document.getElementById('dm-send-btn').disabled=false;
+      if(!result){st.textContent='실패: '+(err||'');return;}
+      const sent=(result.results||[]).filter(x=>x.sent).length,can=(result.results||[]).filter(x=>x.canDM).length;
+      st.textContent=send?`발송 완료: ${sent}명`:`미리보기: DM 가능 ${can}/${(result.results||[]).length}명 (발송 안 함)`;});
+  }catch(e){st.textContent='브리지 연결 실패';document.getElementById('dm-preview-btn').disabled=false;document.getElementById('dm-send-btn').disabled=false;}
+}
+
 async function saveBasicInfo(){
   const cur=localGet(selectedId);
   const elInf=document.getElementById('p-inf-name'),elPhone=document.getElementById('p-phone'),elProduct=document.getElementById('p-product');
@@ -1505,8 +1661,9 @@ function cancelSettle(){
 function openHelp(){document.getElementById('help-overlay').classList.add('open')}
 function closeHelp(e){if(!e||e.target===document.getElementById('help-overlay'))document.getElementById('help-overlay').classList.remove('open')}
 
-const APP_VERSION='v2.31';
+const APP_VERSION='v2.32';
 const CHANGELOG=[
+  {v:'v2.32',d:'2026-07-23',items:["'인플루언서 찾기' 탭 추가 — 기존 인플루언서로 비슷한 결 찾기 또는 해시태그로 인스타 인플루언서 발굴 → 검토 후 리스팅에 추가 / 협업 DM(미리보기·소량 발송). 로컬 브리지+인스타 로그인 필요"]},
   {v:'v2.31',d:'2026-07-06',items:["Flex '프리랜서 용역비 지급요청' 자동 제출 버튼 추가 — 실명·주민번호·은행·계좌+파일3개 자동 입력/첨부 후 결재 요청(로컬 브리지 방식)"]},
   {v:'v2.30',d:'2026-07-06',items:["노션 기입 버튼을 로컬 브리지 방식으로 변경 — 이 PC의 로그인된 크롬으로 '정산 내역'에 실제 기입(관리자 승인 불필요)"]},
   {v:'v2.29',d:'2026-07-06',items:["광고세팅/입금 단계에 노션 '정산 내역' 기입 버튼 추가 — 실명만 가져와 나머지(계약법인·업무내용·정산금액·담당자·날짜 등)는 자동 기입"]},
