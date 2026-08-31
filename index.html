@@ -198,7 +198,7 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <button onclick="switchTab('settlement',this)">정산</button>
     </nav>
     <button class="btn btn-outline btn-sm" style="margin-left:auto;white-space:nowrap" onclick="openHelp()">📖 프로그램 사용법</button>
-    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.34</button>
+    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.35</button>
     <span id="sync-badge">동기화 중...</span>
   </header>
 
@@ -226,6 +226,7 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <span id="bulk-count" style="font-weight:600;color:var(--primary)"></span>
       <button class="btn btn-primary btn-sm" onclick="bulkAdvance()">→ 다음 단계로</button>
       <button class="btn btn-success btn-sm" onclick="bulkSetProduct()">📦 협찬 제품 지정</button>
+      <button class="btn btn-primary btn-sm" onclick="openManageDmModal()">📨 DM 발송</button>
       <button class="btn btn-sm" style="background:none;border:1px solid var(--danger);color:var(--danger)" onclick="bulkReject()">거절됨으로</button>
       <button class="btn btn-danger btn-sm" onclick="bulkDelete()">🗑 삭제</button>
       <button class="btn btn-outline btn-sm" onclick="clearSelection()">✕ 해제</button>
@@ -411,7 +412,7 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
 
 <div class="overlay" id="dm-overlay" onclick="closeDmModal(event)">
   <div class="modal" onclick="event.stopPropagation()" style="max-width:560px">
-    <h3>협업 제안 DM — <span id="dm-target-count"></span>명</h3>
+    <h3><span id="dm-modal-title">협업 제안 DM</span> — <span id="dm-target-count"></span>명</h3>
     <p class="text-muted" style="margin-bottom:8px">{name}=상대 이름, {brand}=해트케 로 자동 치환됩니다. <b>[보내지않음]</b> 줄부터 아래는 메모(발송 제외).</p>
     <div class="fg"><label>DM 문구</label><textarea id="dm-template" style="min-height:220px"></textarea></div>
     <div class="fg"><label>실제 발송 인원 제한</label><input type="number" id="dm-limit" value="10" style="width:100px"> <span class="text-muted">명 (계정 보호를 위해 소량 권장 · 한 명당 90초)</span></div>
@@ -684,15 +685,43 @@ function onTabDragOver(e){if(dragInfId!==null){e.preventDefault();e.dataTransfer
 function onTabDragLeave(e){e.currentTarget.classList.remove('drop-target');}
 function onTabDrop(e,target){e.preventDefault();e.currentTarget.classList.remove('drop-target');const id=dragInfId||(e.dataTransfer&&e.dataTransfer.getData('text/plain'));dragInfId=null;document.body.classList.remove('dragging-row');if(id!==null&&id!=='')dropToStage(id,target);}
 function onPtabDrop(e,product){e.preventDefault();e.currentTarget.classList.remove('drop-target');const id=dragInfId||(e.dataTransfer&&e.dataTransfer.getData('text/plain'));dragInfId=null;document.body.classList.remove('dragging-row');if(id!==null&&id!=='')dropToProduct(id,product);}
-async function dropToProduct(id,product){
+// 행의 제품 배지를 눌러 바로 변경. 그 행이 선택된 상태면 선택 전원에게 적용된다.
+function promptRowProduct(id,e){
+  if(e)e.stopPropagation();
   const inf=localGet(id);if(!inf)return;
+  const n=selectedIds.has(String(id))?selectedIds.size:1;
+  const products=getProducts();
+  const v=prompt(
+    (n>1?`선택한 ${n}명의 협찬 제품을 바꿉니다.`:`@${inf.instagram_id||inf.nickname} 의 협찬 제품을 바꿉니다.`)
+    +`\n비우고 [확인]을 누르면 제품 지정이 해제됩니다.`
+    +(products.length?`\n\n등록된 제품: ${products.join(' / ')}`:''), inf.product||getLastProduct());
+  if(v===null)return;
+  const p=v.trim();
+  try{localStorage.setItem('hattke_last_product',p)}catch(_){}
+  dropToProduct(id,p||'__none__');
+}
+
+// 드래그한 행이 '선택된 행 중 하나'라면 선택된 전원에게 적용한다.
+// (예전엔 여러 명을 체크해도 끌어놓은 한 명만 바뀌어 "안 바뀐다"는 오해가 있었다)
+function dragScopeIds(id){
+  return selectedIds.has(String(id))?[...selectedIds]:[String(id)];
+}
+async function dropToProduct(id,product){
   const newProduct=product==='__none__'?'':product;
-  if(String(inf.product||'')===newProduct)return;
+  const ids=dragScopeIds(id).filter(x=>{const inf=localGet(x);return inf&&String(inf.product||'')!==newProduct});
+  if(!ids.length)return;
+  if(ids.length>1&&!confirm(`선택한 ${ids.length}명의 협찬 제품을 ${newProduct?`'${newProduct}'(으)로 변경`:'해제'}할까요?`))return;
   if(newProduct)addProduct(newProduct);
-  const backup={...inf};
-  localUpdate(id,{product:newProduct});render();if(String(selectedId)===String(id))renderPanel();
-  syncStart();const r=await api('update',{id,product:newProduct});syncEnd();
-  if(!r.success){localUpdate(id,backup);render();if(String(selectedId)===String(id))renderPanel();alert('저장 실패: '+(r.error||''))}
+  const backups=ids.map(x=>({id:x,product:(localGet(x)||{}).product}));
+  backups.forEach(b=>localUpdate(b.id,{product:newProduct}));
+  if(ids.length>1){selectedIds.clear();updateBulkBar()}
+  render();renderProductTabs();refreshProductDatalist();renderPanel();
+  syncStart();
+  const results=await Promise.all(backups.map(b=>api('update',{id:b.id,product:newProduct})));
+  syncEnd();
+  const failed=[];
+  results.forEach((r,idx)=>{if(!r||!r.success){localUpdate(backups[idx].id,{product:backups[idx].product});failed.push(backups[idx].id)}});
+  if(failed.length){render();renderProductTabs();renderPanel();alert(failed.length+'명은 저장에 실패해 원래대로 되돌렸습니다.')}
 }
 
 let lpTimer=null,touchStartX=0,touchStartY=0,touchDragging=false,touchGhost=null,touchDragId=null,lastDropEl=null;
@@ -761,27 +790,42 @@ function endTouchDrag(el){
   else if(kind==='none')dropToProduct(id,'__none__');
 }
 async function dropToStage(id,target){
-  const inf=localGet(id);if(!inf)return;
-  if(target==='rejected'){
-    if(inf.status==='rejected')return;
-    const backup={...inf};localUpdate(id,{status:'rejected'});render();if(String(selectedId)===String(id))renderPanel();
-    syncStart();const r=await api('update',{id,status:'rejected'});syncEnd();
-    if(!r.success){localUpdate(id,backup);render();alert('저장 실패: '+(r.error||''))}
-    return;
-  }
-  const targetStage=Number(target);
-  const targetIdx=STAGES.findIndex(s=>s.id===targetStage);
-  if(targetIdx<0)return;
-  if(inf.status==='active'&&Number(inf.stage)===targetStage)return;
-  const changes={stage:targetStage};
-  if(inf.status!=='active')changes.status='active';
-  if(targetIdx>=1){changes.dm_sent='Y';changes.dm_sent_date=inf.dm_sent_date||new Date().toISOString().split('T')[0];}
-  if(targetStage===0){changes.dm_sent='N';changes.dm_sent_date='';}
-  changes.sponsorship_done=(targetStage===7)?'Y':'N';
-  const backup={...inf};
-  localUpdate(id,changes);render();if(String(selectedId)===String(id))renderPanel();
-  syncStart();const r=await api('update',Object.assign({id},changes));syncEnd();
-  if(!r.success){localUpdate(id,backup);render();if(String(selectedId)===String(id))renderPanel();alert('저장 실패: '+(r.error||''))}
+  const targetStage=target==='rejected'?null:Number(target);
+  const targetIdx=targetStage===null?-1:STAGES.findIndex(s=>s.id===targetStage);
+  if(targetStage!==null&&targetIdx<0)return;
+  // 제품 드롭과 마찬가지로, 선택된 행을 끌면 선택 전원에게 적용
+  const ids=dragScopeIds(id).filter(x=>{
+    const inf=localGet(x);if(!inf)return false;
+    if(targetStage===null)return inf.status!=='rejected';
+    return !(inf.status==='active'&&Number(inf.stage)===targetStage);
+  });
+  if(!ids.length)return;
+  const label=targetStage===null?'거절됨':(STAGES.find(s=>s.id===targetStage)||{}).name;
+  if(ids.length>1&&!confirm(`선택한 ${ids.length}명을 '${label}'(으)로 옮길까요?`))return;
+
+  const today=new Date().toISOString().split('T')[0];
+  const items=ids.map(x=>{
+    const inf=localGet(x);
+    let changes;
+    if(targetStage===null)changes={status:'rejected'};
+    else{
+      changes={stage:targetStage};
+      if(inf.status!=='active')changes.status='active';
+      if(targetIdx>=1){changes.dm_sent='Y';changes.dm_sent_date=inf.dm_sent_date||today;}
+      if(targetStage===0){changes.dm_sent='N';changes.dm_sent_date='';}
+      changes.sponsorship_done=(targetStage===7)?'Y':'N';
+    }
+    return {id:x,changes,backup:{...inf}};
+  });
+  items.forEach(it=>localUpdate(it.id,it.changes));
+  if(ids.length>1){selectedIds.clear();updateBulkBar()}
+  render();renderPanel();
+  syncStart();
+  const results=await Promise.all(items.map(it=>api('update',Object.assign({id:it.id},it.changes))));
+  syncEnd();
+  const failed=[];
+  results.forEach((r,idx)=>{if(!r||!r.success){localUpdate(items[idx].id,items[idx].backup);failed.push(items[idx].id)}});
+  if(failed.length){render();renderPanel();alert(failed.length+'명은 저장에 실패해 원래대로 되돌렸습니다.')}
 }
 
 function getFilteredList(){
@@ -803,7 +847,10 @@ function renderList(){
   tbody.innerHTML=list.map(i=>{
     const si=i.status==='rejected'?{name:'거절됨',color:'#e74c3c'}:i.status==='done'?{name:'완료됨',color:'#22c55e'}:getStageInfo(i.stage);
     const _ph=i.product?productColor(i.product):0;
-    const prodBadge=i.product?`<span class="prod-badge" style="background:hsl(${_ph},45%,17%);color:hsl(${_ph},78%,72%);border-color:hsl(${_ph},40%,32%)">${escHtml(i.product)}</span> `:'';
+    // 배지를 눌러 그 자리에서 제품을 바꿀 수 있게 (제품이 없으면 '＋제품' 버튼으로 표시)
+    const prodBadge=i.product
+      ?`<span class="prod-badge" style="cursor:pointer;background:hsl(${_ph},45%,17%);color:hsl(${_ph},78%,72%);border-color:hsl(${_ph},40%,32%)" title="클릭해서 제품 변경" onclick="promptRowProduct('${escJs(String(i.id))}',event)">${escHtml(i.product)}</span> `
+      :`<span class="prod-badge" style="cursor:pointer;background:var(--surface3);color:var(--muted);border-color:var(--border)" title="클릭해서 제품 지정" onclick="promptRowProduct('${escJs(String(i.id))}',event)">＋제품</span> `;
     const isListing=i.status==='active'&&(Number(i.stage)===0||Number(i.stage)===1);
     const isDmStage=i.status==='active'&&Number(i.stage)===2;
     const isRejected=i.status==='rejected';
@@ -1527,30 +1574,67 @@ async function instaAddToListing(){
   render();
   alert(`추가 완료: ${added}명${skipped?` · 이미 있어 건너뜀 ${skipped}명`:''}`);
 }
-function openDmModal(){
-  const sel=getSelectedFinds();if(!sel.length)return alert('DM 보낼 인플루언서를 선택하세요.');
-  document.getElementById('dm-target-count').textContent=sel.length;
+// DM 대상은 '찾기 결과'와 '관리 탭에서 선택한 인플루언서' 두 곳에서 온다.
+// dmTargets: [{username, name, id?}] — id 가 있으면 발송 후 시트에 DM 발송일을 기록한다.
+let dmTargets=[];
+function openDmWith(targets,title){
+  if(!targets.length)return alert('DM 보낼 인플루언서를 선택하세요.');
+  dmTargets=targets;
+  document.getElementById('dm-target-count').textContent=targets.length;
+  document.getElementById('dm-modal-title').textContent=title;
   const t=document.getElementById('dm-template');if(!t.value)t.value=DM_DEFAULT;
   document.getElementById('dm-status').textContent='';document.getElementById('dm-log').style.display='none';
   document.getElementById('dm-overlay').classList.add('open');
 }
+const shortName=s=>String(s||'').split(/[|｜/,()]/)[0].trim();
+function openDmModal(){
+  openDmWith(getSelectedFinds().map(r=>({username:r.username,name:shortName(r.fullName||r.username)})),'협업 제안 DM (찾기 결과)');
+}
+// 관리 탭: 체크한 인플루언서에게 DM. 계정명이 없는 사람은 보낼 수 없어 제외한다.
+function openManageDmModal(){
+  const picked=[...selectedIds].map(id=>localGet(id)).filter(Boolean);
+  const targets=[],noAccount=[];
+  picked.forEach(i=>{
+    const u=String(i.instagram_id||i.nickname||'').trim().replace(/^@/,'');
+    if(u)targets.push({id:i.id,username:u,name:shortName(i.influencer_name||i.name||u)});
+    else noAccount.push(i.id);
+  });
+  if(noAccount.length)alert(noAccount.length+'명은 인스타 계정명이 없어 DM 대상에서 제외했습니다.');
+  openDmWith(targets,'협업 제안 DM (관리 탭 선택)');
+}
 function closeDmModal(e){if(!e||e.target===document.getElementById('dm-overlay'))document.getElementById('dm-overlay').classList.remove('open');}
+// 발송이 확인된 대상만 시트에 DM 발송 기록을 남긴다(관리 탭에서 연 경우).
+async function markDmSent(results){
+  const byUser={};dmTargets.forEach(t=>{if(t.id)byUser[String(t.username).toLowerCase()]=t.id});
+  const today=new Date().toISOString().split('T')[0];
+  const ids=(results||[]).filter(x=>x.sent).map(x=>byUser[String(x.username).toLowerCase()]).filter(Boolean);
+  if(!ids.length)return 0;
+  ids.forEach(id=>localUpdate(id,{dm_sent:'Y',dm_sent_date:today}));
+  render();
+  syncStart();await Promise.all(ids.map(id=>api('update',{id,dm_sent:'Y',dm_sent_date:today})));syncEnd();
+  return ids.length;
+}
 async function instaDm(send){
-  const sel=getSelectedFinds();if(!sel.length)return;
+  if(!dmTargets.length)return;
   const template=document.getElementById('dm-template').value;
   const limit=+document.getElementById('dm-limit').value||10;
-  if(send&&!confirm(`실제로 DM을 발송합니다.\n대상 ${sel.length}명 중 최대 ${limit}명, 한 명당 90초 간격.\n인스타 계정 정지 위험이 있습니다. 진행할까요?`))return;
+  if(send&&!confirm(`실제로 DM을 발송합니다.\n대상 ${dmTargets.length}명 중 최대 ${limit}명, 한 명당 90초 간격.\n인스타 계정 정지 위험이 있습니다. 진행할까요?`))return;
   const st=document.getElementById('dm-status'),log=document.getElementById('dm-log');
   document.getElementById('dm-preview-btn').disabled=true;document.getElementById('dm-send-btn').disabled=true;
   st.textContent=send?'발송 중... (오래 걸립니다. 창 켜두세요)':'미리보기 확인 중...';log.style.display='none';log.textContent='';
   try{
-    const targets=sel.map(r=>({username:r.username,name:(r.fullName||r.username).split(/[|｜/,()]/)[0].trim()}));
+    const targets=dmTargets.map(t=>({username:t.username,name:t.name}));
     const r=await(await fetch(BRIDGE+'/insta/dm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({targets,template,send,limit})})).json();
     if(!r.jobId){st.textContent='실패: '+(r.error||'');document.getElementById('dm-preview-btn').disabled=false;document.getElementById('dm-send-btn').disabled=false;return;}
-    pollJob(r.jobId,log,st,(result,err)=>{document.getElementById('dm-preview-btn').disabled=false;document.getElementById('dm-send-btn').disabled=false;
+    pollJob(r.jobId,log,st,async(result,err)=>{document.getElementById('dm-preview-btn').disabled=false;document.getElementById('dm-send-btn').disabled=false;
       if(!result){st.textContent='실패: '+(err||'');return;}
-      const sent=(result.results||[]).filter(x=>x.sent).length,can=(result.results||[]).filter(x=>x.canDM).length;
-      st.textContent=send?`발송 완료: ${sent}명`:`미리보기: DM 가능 ${can}/${(result.results||[]).length}명 (발송 안 함)`;});
+      const rows=result.results||[];
+      const sent=rows.filter(x=>x.sent).length,can=rows.filter(x=>x.canDM).length;
+      if(!send){st.textContent=`미리보기: DM 가능 ${can}/${rows.length}명 (발송 안 함)`;return}
+      const marked=await markDmSent(rows);
+      st.textContent=`발송 완료: ${sent}/${rows.length}명`+(marked?` · ${marked}명 DM 발송일 기록됨`:'')
+        +(sent<rows.length?` · 실패 ${rows.length-sent}명은 아래 로그 확인`:'');
+    });
   }catch(e){st.textContent='브리지 연결 실패';document.getElementById('dm-preview-btn').disabled=false;document.getElementById('dm-send-btn').disabled=false;}
 }
 
@@ -1779,8 +1863,9 @@ function cancelSettle(){
 function openHelp(){document.getElementById('help-overlay').classList.add('open')}
 function closeHelp(e){if(!e||e.target===document.getElementById('help-overlay'))document.getElementById('help-overlay').classList.remove('open')}
 
-const APP_VERSION='v2.34';
+const APP_VERSION='v2.35';
 const CHANGELOG=[
+  {v:'v2.35',d:'2026-08-31',items:['관리 탭에서 선택한 인플루언서에게 바로 DM 발송 — 발송 확인된 사람만 DM 발송일이 기록됩니다','제품 배지를 클릭해 그 자리에서 협찬 제품 변경','여러 명을 선택한 채 드래그하면 선택 전원의 제품·단계가 함께 바뀝니다 (예전엔 끌어놓은 1명만 바뀜)']},
   {v:'v2.34',d:'2026-08-31',items:['인플루언서 찾기 학습 기능 — 결과에 👍/👎 를 주면 구글 시트에 쌓이고, 👎 준 계정은 다시 안 나옵니다','해시태그 점수판 추가 — 👍/👎 로 태그 점수가 매겨지고, 태그를 직접 켜고/끄고/추가해 찾는 방향을 조종할 수 있습니다','이미 등록된 계정은 발굴 단계에서 미리 제외 (검사 시간 절약)']},
   {v:'v2.33',d:'2026-08-31',items:['실명·연락처·주소 없이도 단계 이동 가능 (필수 검증 해제)','일괄 작업에 [📦 협찬 제품 지정] 추가 — 전체선택 후 여러 명의 협찬 제품을 한 번에 지정/해제']},
   {v:'v2.32',d:'2026-07-23',items:["'인플루언서 찾기' 탭 추가 — 기존 인플루언서로 비슷한 결 찾기 또는 해시태그로 인스타 인플루언서 발굴 → 검토 후 리스팅에 추가 / 협업 DM(미리보기·소량 발송). 로컬 브리지+인스타 로그인 필요"]},
