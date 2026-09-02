@@ -198,7 +198,8 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <button onclick="switchTab('settlement',this)">정산</button>
     </nav>
     <button class="btn btn-outline btn-sm" style="margin-left:auto;white-space:nowrap" onclick="openHelp()">📖 프로그램 사용법</button>
-    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.35</button>
+    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.36</button>
+    <button class="btn btn-outline btn-sm" style="white-space:nowrap" onclick="logout()" title="이 브라우저에서 로그아웃">🔒 잠금</button>
     <span id="sync-badge">동기화 중...</span>
   </header>
 
@@ -410,6 +411,16 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
   </div>
 </div>
 
+<div class="overlay" id="login-overlay" style="z-index:2000">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:380px;text-align:center">
+    <h3 style="margin-bottom:6px">🔒 해트케 인플루언서</h3>
+    <p class="text-muted" style="margin-bottom:14px">비밀번호를 입력하면 데이터를 불러옵니다.</p>
+    <div class="fg"><input type="password" id="login-pw" placeholder="비밀번호" autocomplete="current-password" style="text-align:center"></div>
+    <div id="login-msg" class="text-muted" style="min-height:18px;margin-bottom:10px;color:var(--danger)"></div>
+    <button class="btn btn-primary btn-block" id="login-btn" onclick="doLogin()">들어가기</button>
+  </div>
+</div>
+
 <div class="overlay" id="dm-overlay" onclick="closeDmModal(event)">
   <div class="modal" onclick="event.stopPropagation()" style="max-width:560px">
     <h3><span id="dm-modal-title">협업 제안 DM</span> — <span id="dm-target-count"></span>명</h3>
@@ -500,19 +511,39 @@ function syncEnd(){syncCount=Math.max(0,syncCount-1);if(!syncCount)document.getE
 
 function isTempId(id){return String(id||'').startsWith('temp_');}
 const SAVING_MSG='아직 저장 중인 항목입니다. 1~2초 후 다시 시도해주세요.';
+
+// ── 비밀번호 잠금 ────────────────────────────────────────────
+// 비밀번호 원문은 어디에도 저장·전송하지 않는다. SHA-256 해시만 토큰으로 쓴다.
+// 실제 검증은 Apps Script 가 하므로, 이 파일을 뜯어봐도 데이터는 못 가져간다.
+const TOKEN_KEY='hattke_token';
+let authToken='';
+try{authToken=localStorage.getItem(TOKEN_KEY)||''}catch(e){}
+async function sha256Hex(s){
+  const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));
+  return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function setAuthToken(t){authToken=t||'';try{t?localStorage.setItem(TOKEN_KEY,t):localStorage.removeItem(TOKEN_KEY)}catch(e){}}
+// 서버가 '로그인 필요'라고 하면 토큰을 버리고 다시 잠근다
+function handleAuthFail(r){
+  if(r&&r.needLogin){setAuthToken('');showLogin(r.error||'다시 로그인해주세요.');return true}
+  return false;
+}
+
 async function api(action,data){
   if(data&&isTempId(data.id)&&action!=='add')return{success:false,error:SAVING_MSG};
   try{
     const url=new URL(SCRIPT_URL);url.searchParams.set('action',action);
     if(data)url.searchParams.set('data',JSON.stringify(data));
-    const res=await fetch(url.toString());return await res.json();
+    if(authToken)url.searchParams.set('token',authToken);
+    const res=await fetch(url.toString());const j=await res.json();
+    handleAuthFail(j);return j;
   }catch(e){return{success:false,error:e.message}}
 }
 async function apiPost(action,data){
   if(data&&isTempId(data.id)&&action!=='addGuide')return{success:false,error:SAVING_MSG};
   try{
-    const res=await fetch(SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(Object.assign({action},data||{}))});
-    return await res.json();
+    const res=await fetch(SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(Object.assign({action,token:authToken},data||{}))});
+    const j=await res.json();handleAuthFail(j);return j;
   }catch(e){return{success:false,error:e.message}}
 }
 // 업로드 전 이미지 축소·압축 (사진 용량을 줄여 업로드 속도 향상). PDF·HEIC는 원본 유지
@@ -582,13 +613,44 @@ function localUpdate(id,changes){const inf=localGet(id);if(inf)Object.assign(inf
 function localRemove(id){influencers=influencers.filter(i=>String(i.id)!==String(id))}
 function localAdd(item){influencers.unshift(item)}
 
-window.onload=()=>{
-  document.getElementById('add-recruited-date').value=new Date().toISOString().split('T')[0];
-  setThisMonth();showLoading();initTouchDrag();
-  const vb=document.getElementById('version-btn');if(vb)vb.textContent=APP_VERSION;
+function showLogin(msg){
+  const ov=document.getElementById('login-overlay');if(!ov)return;
+  document.getElementById('login-msg').textContent=msg||'';
+  ov.classList.add('open');
+  const pw=document.getElementById('login-pw');if(pw){pw.value='';setTimeout(()=>pw.focus(),50)}
+}
+function hideLogin(){const ov=document.getElementById('login-overlay');if(ov)ov.classList.remove('open')}
+async function doLogin(){
+  const pw=document.getElementById('login-pw').value;
+  if(!pw)return;
+  const btn=document.getElementById('login-btn'),msg=document.getElementById('login-msg');
+  btn.disabled=true;msg.textContent='확인 중...';
+  try{
+    const token=await sha256Hex(pw);
+    const url=new URL(SCRIPT_URL);url.searchParams.set('action','login');url.searchParams.set('token',token);
+    const r=await(await fetch(url.toString())).json();
+    if(r&&r.success){setAuthToken(token);hideLogin();loadAllData();}
+    else if(r&&/unknown action/i.test(r.error||'')){msg.textContent='백엔드가 아직 이전 버전입니다. Apps Script에 새 Code.gs를 적용하고 재배포해주세요.';}
+    else{msg.textContent=(r&&r.error)||'비밀번호가 올바르지 않습니다.';}
+  }catch(e){msg.textContent='서버에 연결하지 못했습니다: '+e.message}
+  btn.disabled=false;
+}
+function logout(){setAuthToken('');influencers=[];settlements={};guides=[];render();showLogin('로그아웃되었습니다.');}
+
+function loadAllData(){
+  showLoading();
   api('getAll').then(r=>{hideLoading();if(r.success){influencers=r.data.filter(d=>['active','rejected','done'].includes(String(d.status||'').trim()));render()}});
   api('getSettlements').then(r=>{if(r.success&&r.data){settlements=normalizeSettlements(r.data);if(document.getElementById('tab-settlement').classList.contains('active'))renderSettlement();}});
   api('getGuides').then(r=>{if(r.success&&r.data){guides=r.data;if(document.getElementById('tab-guide').classList.contains('active')){renderGuideTabs();renderGuideList();}}else{const el=document.getElementById('guide-list');if(el)el.innerHTML='<div class="empty">가이드를 불러오지 못했습니다. (백엔드 재배포 필요할 수 있음)</div>';}});
+}
+
+window.onload=()=>{
+  document.getElementById('add-recruited-date').value=new Date().toISOString().split('T')[0];
+  setThisMonth();initTouchDrag();
+  const vb=document.getElementById('version-btn');if(vb)vb.textContent=APP_VERSION;
+  const pw=document.getElementById('login-pw');
+  if(pw)pw.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
+  if(authToken)loadAllData(); else showLogin('');
 };
 function switchTab(name,btn){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
@@ -1863,8 +1925,9 @@ function cancelSettle(){
 function openHelp(){document.getElementById('help-overlay').classList.add('open')}
 function closeHelp(e){if(!e||e.target===document.getElementById('help-overlay'))document.getElementById('help-overlay').classList.remove('open')}
 
-const APP_VERSION='v2.35';
+const APP_VERSION='v2.36';
 const CHANGELOG=[
+  {v:'v2.36',d:'2026-09-02',items:['비밀번호 잠금 — 비밀번호를 입력해야 데이터를 불러옵니다. 검증은 서버(Apps Script)에서 하므로 소스를 뜯어봐도 우회되지 않습니다','헤더의 [🔒 잠금] 으로 이 브라우저에서 로그아웃']},
   {v:'v2.35',d:'2026-08-31',items:['관리 탭에서 선택한 인플루언서에게 바로 DM 발송 — 발송 확인된 사람만 DM 발송일이 기록됩니다','제품 배지를 클릭해 그 자리에서 협찬 제품 변경','여러 명을 선택한 채 드래그하면 선택 전원의 제품·단계가 함께 바뀝니다 (예전엔 끌어놓은 1명만 바뀜)']},
   {v:'v2.34',d:'2026-08-31',items:['인플루언서 찾기 학습 기능 — 결과에 👍/👎 를 주면 구글 시트에 쌓이고, 👎 준 계정은 다시 안 나옵니다','해시태그 점수판 추가 — 👍/👎 로 태그 점수가 매겨지고, 태그를 직접 켜고/끄고/추가해 찾는 방향을 조종할 수 있습니다','이미 등록된 계정은 발굴 단계에서 미리 제외 (검사 시간 절약)']},
   {v:'v2.33',d:'2026-08-31',items:['실명·연락처·주소 없이도 단계 이동 가능 (필수 검증 해제)','일괄 작업에 [📦 협찬 제품 지정] 추가 — 전체선택 후 여러 명의 협찬 제품을 한 번에 지정/해제']},
