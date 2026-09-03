@@ -198,7 +198,7 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <button onclick="switchTab('settlement',this)">정산</button>
     </nav>
     <button class="btn btn-outline btn-sm" style="margin-left:auto;white-space:nowrap" onclick="openHelp()">📖 프로그램 사용법</button>
-    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.36</button>
+    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.37</button>
     <button class="btn btn-outline btn-sm" style="white-space:nowrap" onclick="logout()" title="이 브라우저에서 로그아웃">🔒 잠금</button>
     <span id="sync-badge">동기화 중...</span>
   </header>
@@ -574,9 +574,13 @@ async function uploadToDrive(file,label){
         const base64Data=e.target.result.split(',')[1];
         const ext=(String(file.name).match(/\.[^.\/\\]+$/)||[''])[0];
         const fileName=label+ext;
-        const res=await fetch(SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'uploadFile',fileName,mimeType:file.type||'application/octet-stream',base64Data})});
-        const r=await res.json();resolve(r.success?r.url:null);
-      }catch{resolve(null)}
+        // 인증 토큰을 반드시 함께 보낸다 (여기만 apiPost 를 안 거치고 직접 fetch 하므로 빠뜨리기 쉽다)
+        const res=await fetch(SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'uploadFile',token:authToken,fileName,mimeType:file.type||'application/octet-stream',base64Data})});
+        const r=await res.json();
+        if(handleAuthFail(r)){resolve(null);return}
+        if(!r.success)console.warn('업로드 실패:',r.error);
+        resolve(r.success?r.url:null);
+      }catch(err){console.warn('업로드 오류:',err);resolve(null)}
     };
     reader.readAsDataURL(file);
   });
@@ -1046,6 +1050,7 @@ async function bulkDelete(){
   syncStart();
   const results=await Promise.all(ids.map(id=>{
     const url=new URL(SCRIPT_URL);url.searchParams.set('action','delete');url.searchParams.set('id',id);
+    if(authToken)url.searchParams.set('token',authToken);
     return fetch(url.toString()).then(r=>r.json()).catch(e=>({success:false,error:e.message}));
   }));
   syncEnd();
@@ -1817,7 +1822,7 @@ async function deleteInfluencer(){
   const deletedId=selectedId;const backup={...localGet(deletedId)};
   localRemove(deletedId);closePanel();render();
   syncStart();
-  try{const url=new URL(SCRIPT_URL);url.searchParams.set('action','delete');url.searchParams.set('id',deletedId);const res=await fetch(url.toString());const r=await res.json();syncEnd();if(!r.success){localAdd(backup);render();alert('삭제 실패: '+r.error)}}
+  try{const url=new URL(SCRIPT_URL);url.searchParams.set('action','delete');url.searchParams.set('id',deletedId);if(authToken)url.searchParams.set('token',authToken);const res=await fetch(url.toString());const r=await res.json();syncEnd();if(handleAuthFail(r)){localAdd(backup);render();return}if(!r.success){localAdd(backup);render();alert('삭제 실패: '+r.error)}}
   catch(e){syncEnd();localAdd(backup);render();alert('오류: '+e.message)}
 }
 
@@ -1925,8 +1930,9 @@ function cancelSettle(){
 function openHelp(){document.getElementById('help-overlay').classList.add('open')}
 function closeHelp(e){if(!e||e.target===document.getElementById('help-overlay'))document.getElementById('help-overlay').classList.remove('open')}
 
-const APP_VERSION='v2.36';
+const APP_VERSION='v2.37';
 const CHANGELOG=[
+  {v:'v2.37',d:'2026-09-02',items:['파일 업로드(계약서·통장사본·신분증)와 삭제 기능 복구 — v2.36 비밀번호 잠금 이후 이 세 경로에 인증 토큰이 빠져 있어 실패했습니다']},
   {v:'v2.36',d:'2026-09-02',items:['비밀번호 잠금 — 비밀번호를 입력해야 데이터를 불러옵니다. 검증은 서버(Apps Script)에서 하므로 소스를 뜯어봐도 우회되지 않습니다','헤더의 [🔒 잠금] 으로 이 브라우저에서 로그아웃']},
   {v:'v2.35',d:'2026-08-31',items:['관리 탭에서 선택한 인플루언서에게 바로 DM 발송 — 발송 확인된 사람만 DM 발송일이 기록됩니다','제품 배지를 클릭해 그 자리에서 협찬 제품 변경','여러 명을 선택한 채 드래그하면 선택 전원의 제품·단계가 함께 바뀝니다 (예전엔 끌어놓은 1명만 바뀜)']},
   {v:'v2.34',d:'2026-08-31',items:['인플루언서 찾기 학습 기능 — 결과에 👍/👎 를 주면 구글 시트에 쌓이고, 👎 준 계정은 다시 안 나옵니다','해시태그 점수판 추가 — 👍/👎 로 태그 점수가 매겨지고, 태그를 직접 켜고/끄고/추가해 찾는 방향을 조종할 수 있습니다','이미 등록된 계정은 발굴 단계에서 미리 제외 (검사 시간 절약)']},
