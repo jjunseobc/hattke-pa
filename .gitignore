@@ -3,3 +3,6 @@ Code.gs
 *.backup.json
 # 로컬 노션 브리지(로그인 프로필·node_modules 포함 — 로컬 전용)
 notion-bridge/
+# 인플루언서 찾기 툴킷(로그인 프로필·수집데이터 포함 — 로컬 전용)
+influencer-finder/
+Code.gs.backup*
