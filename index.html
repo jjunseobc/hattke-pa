@@ -198,7 +198,7 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <button onclick="switchTab('settlement',this)">정산</button>
     </nav>
     <button class="btn btn-outline btn-sm" style="margin-left:auto;white-space:nowrap" onclick="openHelp()">📖 프로그램 사용법</button>
-    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.44</button>
+    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.45</button>
     <button class="btn btn-outline btn-sm" style="white-space:nowrap" onclick="logout()" title="이 브라우저에서 로그아웃">🔒 잠금</button>
     <span id="sync-badge">동기화 중...</span>
   </header>
@@ -278,10 +278,14 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
         <div class="filter-tab" id="fmode-tag" onclick="setFindMode('tag')">해시태그로 찾기</div>
       </div>
       <div id="find-seed-box">
-        <div class="text-muted" style="margin-bottom:6px">hattke-pa에 등록된 인플루언서 <b id="seed-count">0</b>명을 시드로 사용해 비슷한 결을 찾습니다. (거절/완료 포함 전체 계정명 — 모두 우리가 원했던 사람들이라 좋은 기준이 됩니다)</div>
+        <div class="fg" style="margin-bottom:8px">
+          <label>기준 제품 — 이 제품으로 진행한 인플루언서들의 결을 따라 찾습니다</label>
+          <select id="find-product" onchange="onFindProductChange()" style="max-width:360px"></select>
+        </div>
+        <div class="text-muted" style="margin-bottom:6px">시드 <b id="seed-count">0</b>명 <span id="seed-scope"></span> — 거절/완료 포함 (모두 우리가 원했던 사람들이라 좋은 기준이 됩니다)</div>
         <div id="tag-board" style="display:none;margin:8px 0 4px">
           <div class="text-muted" style="margin-bottom:4px">
-            🎯 <b>학습된 해시태그</b> — 👍/👎 를 줄수록 점수가 갱신됩니다. 끄면 이번 찾기에서 제외돼요.
+            🎯 <b>학습된 해시태그</b> <span id="tag-scope" class="text-muted"></span> — 👍/👎 를 줄수록 점수가 갱신됩니다. 끄면 이번 찾기에서 제외돼요.
             <button class="btn btn-outline btn-sm" style="margin-left:6px" onclick="promptAddFindTag()">+ 태그 추가</button>
             <button class="btn btn-outline btn-sm" onclick="resetFindTags()">↺ 시드에서 다시 뽑기</button>
           </div>
@@ -1573,7 +1577,47 @@ const DM_DEFAULT=`안녕하세요 {name}님, '{brand}'에서 협업 제안 드�
 
 – {brand} 드림 –`;
 function setFindMode(m){findMode=m;document.getElementById('fmode-seed').classList.toggle('active',m==='seed');document.getElementById('fmode-tag').classList.toggle('active',m==='tag');document.getElementById('find-seed-box').style.display=m==='seed'?'':'none';document.getElementById('find-tag-box').style.display=m==='tag'?'':'none';}
-function renderSeedCount(){const el=document.getElementById('seed-count');if(el)el.textContent=influencers.filter(i=>String(i.instagram_id||i.nickname||'').trim()).length;}
+// 제품마다 결이 다르므로, 시드를 제품별로 골라 쓴다.
+// 'all'=전체, '__none__'=제품 미지정, 그 외는 제품명.
+let findProduct='all';
+try{findProduct=localStorage.getItem('hattke_find_product')||'all'}catch(e){}
+function seedAccounts(){
+  return [...new Set(influencers
+    .filter(i=>{
+      if(findProduct==='all')return true;
+      const p=String(i.product||'').trim();
+      return findProduct==='__none__'?!p:p===findProduct;
+    })
+    .map(i=>String(i.instagram_id||i.nickname||'').trim())
+    .filter(Boolean))];
+}
+function findProductLabel(){
+  return findProduct==='all'?'전체 제품':findProduct==='__none__'?'제품 미지정':findProduct;
+}
+function renderFindProducts(){
+  const sel=document.getElementById('find-product');if(!sel)return;
+  const products=getProducts();
+  if(findProduct!=='all'&&findProduct!=='__none__'&&!products.includes(findProduct))findProduct='all';
+  const cnt=(p)=>influencers.filter(i=>{
+    const v=String(i.product||'').trim();
+    return p==='all'?true:p==='__none__'?!v:v===p;
+  }).filter(i=>String(i.instagram_id||i.nickname||'').trim()).length;
+  const opt=(v,label)=>`<option value="${escHtml(v)}"${findProduct===v?' selected':''}>${escHtml(label)} (${cnt(v)}명)</option>`;
+  sel.innerHTML=opt('all','전체 제품')+products.map(p=>opt(p,p)).join('')+opt('__none__','제품 미지정');
+}
+function onFindProductChange(){
+  const sel=document.getElementById('find-product');if(!sel)return;
+  findProduct=sel.value;
+  try{localStorage.setItem('hattke_find_product',findProduct)}catch(e){}
+  loadFindTags();          // 태그 점수판도 제품별로 따로 관리
+  renderSeedCount();renderTagBoard();
+}
+function renderSeedCount(){
+  renderFindProducts();
+  const el=document.getElementById('seed-count');if(el)el.textContent=seedAccounts().length;
+  const sc=document.getElementById('seed-scope');if(sc)sc.textContent=`(${findProductLabel()})`;
+  const ts=document.getElementById('tag-scope');if(ts)ts.textContent=`· ${findProductLabel()}`;
+}
 async function instaLogin(){try{await fetch(BRIDGE+'/insta/login');alert('인스타 로그인 창을 열었습니다. 그 크롬 창에서 인스타 계정으로 로그인하세요(처음 1회).');}catch(e){alert('브리지에 연결 실패 — 이 PC에서 start-bridge.bat 실행 확인');}}
 async function pollJob(jobId,logEl,statusEl,onDone){
   try{
@@ -1596,8 +1640,16 @@ async function loadFinderFeedback(){
   }catch(e){/* 시트에 아직 기능이 없으면 조용히 넘어감 */}
   loadFindTags();renderTagBoard();
 }
-function loadFindTags(){try{findTags=JSON.parse(localStorage.getItem(TAGS_KEY)||'[]')}catch(e){findTags=[]}}
-function saveFindTags(){try{localStorage.setItem(TAGS_KEY,JSON.stringify(findTags))}catch(e){}}
+// 태그 목록은 제품별로 따로 보관한다 (압력이불과 차렵이불의 결이 다르므로).
+// 저장 형태: { "전체": [...], "해트케 압력이불": [...], ... }
+function allFindTags(){
+  try{
+    const raw=JSON.parse(localStorage.getItem(TAGS_KEY)||'{}');
+    return Array.isArray(raw)?{all:raw}:(raw||{});   // 예전(배열) 저장분은 '전체'로 옮겨준다
+  }catch(e){return{}}
+}
+function loadFindTags(){const m=allFindTags();findTags=Array.isArray(m[findProduct])?m[findProduct]:[];}
+function saveFindTags(){try{const m=allFindTags();m[findProduct]=findTags;localStorage.setItem(TAGS_KEY,JSON.stringify(m))}catch(e){}}
 function mergeFindTags(tags){
   (tags||[]).forEach(t=>{const tag=String(t).replace(/^#/,'').trim();if(tag&&!findTags.some(x=>x.tag===tag))findTags.push({tag,on:true})});
   saveFindTags();renderTagBoard();
@@ -1627,7 +1679,7 @@ function promptAddFindTag(){
   mergeFindTags(v.split(',').map(s=>s.trim()).filter(Boolean));
 }
 function resetFindTags(){
-  if(!confirm('저장된 해시태그 목록을 비우고, 다음 찾기에서 시드로부터 다시 뽑을까요?\n(👍/👎 학습 기록은 그대로 유지됩니다)'))return;
+  if(!confirm(`'${findProductLabel()}' 의 해시태그 목록을 비우고, 다음 찾기에서 시드로부터 다시 뽑을까요?\n(👍/👎 학습 기록과 다른 제품의 태그는 그대로 유지됩니다)`))return;
   findTags=[];saveFindTags();renderTagBoard();
 }
 async function setFindVerdict(idx,verdict){
@@ -1659,10 +1711,10 @@ async function instaFind(){
   const btn=document.getElementById('find-btn'),st=document.getElementById('find-status'),log=document.getElementById('find-log');
   const body={mode:findMode,followersMin:+document.getElementById('find-fmin').value||0,followersMax:+document.getElementById('find-fmax').value||999999999,maxCandidates:+document.getElementById('find-max').value||40,exclude:buildExcludeList()};
   if(findMode==='seed'){
-    body.seeds=[...new Set(influencers.map(i=>String(i.instagram_id||i.nickname||'').trim()).filter(Boolean))];
+    body.seeds=seedAccounts();                           // 고른 제품의 인플루언서만 시드로
     const on=findTags.filter(t=>t.on).map(t=>t.tag);
     if(on.length)body.hashtags=on;                       // 화면에서 켜둔 태그가 있으면 그걸로 바로 발굴
-    if(!body.seeds.length&&!on.length)return alert('시드로 쓸 등록 인플루언서가 없습니다. 해시태그 모드를 쓰세요.');
+    if(!body.seeds.length&&!on.length)return alert(`'${findProductLabel()}' 로 등록된 인플루언서가 없습니다.\n다른 제품을 고르거나 해시태그 모드를 쓰세요.`);
   }
   else{body.hashtags=(document.getElementById('find-hashtags').value||'').split(',').map(s=>s.trim()).filter(Boolean);if(!body.hashtags.length)return alert('해시태그를 입력하세요.');}
   btn.disabled=true;st.textContent='찾는 중... (수 분 걸립니다. 창을 켜두세요)';log.style.display='none';log.textContent='';
@@ -2082,8 +2134,9 @@ function cancelSettle(){
 function openHelp(){document.getElementById('help-overlay').classList.add('open')}
 function closeHelp(e){if(!e||e.target===document.getElementById('help-overlay'))document.getElementById('help-overlay').classList.remove('open')}
 
-const APP_VERSION='v2.44';
+const APP_VERSION='v2.45';
 const CHANGELOG=[
+  {v:'v2.45',d:'2026-09-03',items:['인플루언서 찾기 - 비슷한 결 찾기에서 기준 제품을 고를 수 있습니다. 제품마다 결이 달라 그 제품으로 진행한 인플루언서만 시드로 씁니다','해시태그 점수판도 제품별로 따로 관리됩니다']},
   {v:'v2.44',d:'2026-09-03',items:['DM 발송 간격을 90초에서 40초로 단축 (툴킷 config.json 의 dm.sendDelayMs 로 조절)']},
   {v:'v2.43',d:'2026-09-03',items:['DM 발송에 성공하면 리스팅 목록에 있던 인플루언서를 DM 발송 완료 단계로 자동 이동','우측 하단 작은 채팅창으로 열리는 경우에도 DM이 정상 발송되도록 수정 (브리지 쪽 수정 — 재배포 불필요)']},
   {v:'v2.42',d:'2026-09-03',items:['일괄 작업이 일부 실패했을 때 화면만 옛 값으로 되돌리던 문제 수정 — 실제로는 저장됐는데 화면에서 사라진 것처럼 보였습니다. 이제 서버에서 다시 읽어와 진짜 상태를 보여줍니다']},
