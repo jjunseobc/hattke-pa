@@ -198,7 +198,7 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <button onclick="switchTab('settlement',this)">정산</button>
     </nav>
     <button class="btn btn-outline btn-sm" style="margin-left:auto;white-space:nowrap" onclick="openHelp()">📖 프로그램 사용법</button>
-    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.45</button>
+    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.46</button>
     <button class="btn btn-outline btn-sm" style="white-space:nowrap" onclick="logout()" title="이 브라우저에서 로그아웃">🔒 잠금</button>
     <span id="sync-badge">동기화 중...</span>
   </header>
@@ -433,7 +433,11 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
   <div class="modal" onclick="event.stopPropagation()" style="max-width:560px">
     <h3><span id="dm-modal-title">협업 제안 DM</span> — <span id="dm-target-count"></span>명</h3>
     <p class="text-muted" style="margin-bottom:8px">{name}=상대 이름, {brand}=해트케 로 자동 치환됩니다. <b>[보내지않음]</b> 줄부터 아래는 메모(발송 제외).</p>
-    <div class="fg"><label>DM 문구</label><textarea id="dm-template" style="min-height:220px"></textarea></div>
+    <div class="fg">
+      <label>보낼 문구 고르기 <span class="text-muted" style="font-weight:400">— 문구 추가·수정은 [인플루언서 DM 가이드] 탭에서</span></label>
+      <select id="dm-preset" onchange="applyDmPreset()"></select>
+    </div>
+    <div class="fg"><label>DM 문구 <span class="text-muted" style="font-weight:400">(고친 내용은 자동 저장돼 다음에도 그대로 뜹니다)</span></label><textarea id="dm-template" style="min-height:220px" oninput="onDmTemplateInput()"></textarea></div>
     <div class="fg"><label>실제 발송 인원 제한</label><input type="number" id="dm-limit" value="10" style="width:100px"> <span class="text-muted">명 (계정 보호를 위해 소량 권장 · 한 명당 40초)</span></div>
     <span id="dm-status" class="text-muted"></span>
     <pre id="dm-log" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px;font-size:11px;max-height:140px;overflow:auto;margin-top:8px;white-space:pre-wrap"></pre>
@@ -1769,9 +1773,57 @@ function openDmWith(targets,title){
   dmTargets=targets;
   document.getElementById('dm-target-count').textContent=targets.length;
   document.getElementById('dm-modal-title').textContent=title;
-  const t=document.getElementById('dm-template');if(!t.value)t.value=DM_DEFAULT;
+  // 고쳐둔 문구를 되살린다 (예전엔 새로고침하면 기본 문구로 초기화됐다)
+  const t=document.getElementById('dm-template');
+  if(!t.value)t.value=loadDmTemplate()||DM_DEFAULT;
+  renderDmPresets();
   document.getElementById('dm-status').textContent='';document.getElementById('dm-log').style.display='none';
   document.getElementById('dm-overlay').classList.add('open');
+}
+
+// ── DM 문구 고르기 ────────────────────────────────────────────
+// 목록은 [인플루언서 DM 가이드] 탭에 저장된 문구(dm_guides)를 그대로 쓴다.
+const DM_TPL_KEY='hattke_dm_template',DM_PRESET_KEY='hattke_dm_preset';
+function loadDmTemplate(){try{return localStorage.getItem(DM_TPL_KEY)||''}catch(e){return ''}}
+function saveDmTemplate(){try{localStorage.setItem(DM_TPL_KEY,document.getElementById('dm-template').value)}catch(e){}}
+function presetContent(v){
+  if(v==='__default__')return DM_DEFAULT;
+  if(String(v).startsWith('g:')){const g=guides.find(x=>String(x.id)===String(v).slice(2));return g?String(g.content||''):''}
+  return '';
+}
+function renderDmPresets(){
+  const sel=document.getElementById('dm-preset');if(!sel)return;
+  let saved='';try{saved=localStorage.getItem(DM_PRESET_KEY)||''}catch(e){}
+  const opts=['<option value="__default__">기본 협업 제안 문구</option>'];
+  guides.slice()
+    .sort((a,b)=>String(a.product||'').localeCompare(String(b.product||''),'ko')||String(a.title||'').localeCompare(String(b.title||''),'ko'))
+    .forEach(g=>{
+      const p=String(g.product||'').trim()||'공통';
+      opts.push(`<option value="g:${escHtml(String(g.id))}">${escHtml(p)} · ${escHtml(g.title||'제목 없음')}</option>`);
+    });
+  opts.push('<option value="__custom__">✏️ 직접 입력한 문구</option>');
+  sel.innerHTML=opts.join('');
+  sel.value=[...sel.options].some(o=>o.value===saved)?saved:'__custom__';
+}
+function applyDmPreset(){
+  const sel=document.getElementById('dm-preset'),t=document.getElementById('dm-template');
+  if(!sel||!t)return;
+  const v=sel.value;
+  if(v==='__custom__'){try{localStorage.setItem(DM_PRESET_KEY,v)}catch(e){}return}
+  const next=presetContent(v);
+  if(!next)return alert('그 문구의 내용이 비어 있습니다. [인플루언서 DM 가이드] 탭에서 내용을 채워주세요.');
+  if(t.value.trim()&&t.value.trim()!==next.trim()&&!confirm('지금 작성한 문구를 고른 문구로 바꿀까요?\n(지금 문구는 사라집니다)')){renderDmPresets();return}
+  t.value=next;saveDmTemplate();
+  try{localStorage.setItem(DM_PRESET_KEY,v)}catch(e){}
+}
+// 고른 문구를 손대면 '직접 입력'으로 표시해, 다음에 열 때 덮어쓰지 않게 한다
+function onDmTemplateInput(){
+  saveDmTemplate();
+  const sel=document.getElementById('dm-preset');if(!sel||sel.value==='__custom__')return;
+  const base=String(presetContent(sel.value)||'').trim();
+  if(document.getElementById('dm-template').value.trim()!==base){
+    sel.value='__custom__';try{localStorage.setItem(DM_PRESET_KEY,'__custom__')}catch(e){}
+  }
 }
 const shortName=s=>String(s||'').split(/[|｜/,()]/)[0].trim();
 function openDmModal(){
@@ -2134,8 +2186,9 @@ function cancelSettle(){
 function openHelp(){document.getElementById('help-overlay').classList.add('open')}
 function closeHelp(e){if(!e||e.target===document.getElementById('help-overlay'))document.getElementById('help-overlay').classList.remove('open')}
 
-const APP_VERSION='v2.45';
+const APP_VERSION='v2.46';
 const CHANGELOG=[
+  {v:'v2.46',d:'2026-09-03',items:['DM 문구가 새로고침하면 초기화되던 문제 해결 — 고친 내용이 자동 저장됩니다','협업 제안 DM 모달에서 보낼 문구를 목록에서 고를 수 있습니다. 목록은 [인플루언서 DM 가이드] 탭에 저장한 문구를 그대로 씁니다']},
   {v:'v2.45',d:'2026-09-03',items:['인플루언서 찾기 - 비슷한 결 찾기에서 기준 제품을 고를 수 있습니다. 제품마다 결이 달라 그 제품으로 진행한 인플루언서만 시드로 씁니다','해시태그 점수판도 제품별로 따로 관리됩니다']},
   {v:'v2.44',d:'2026-09-03',items:['DM 발송 간격을 90초에서 40초로 단축 (툴킷 config.json 의 dm.sendDelayMs 로 조절)']},
   {v:'v2.43',d:'2026-09-03',items:['DM 발송에 성공하면 리스팅 목록에 있던 인플루언서를 DM 발송 완료 단계로 자동 이동','우측 하단 작은 채팅창으로 열리는 경우에도 DM이 정상 발송되도록 수정 (브리지 쪽 수정 — 재배포 불필요)']},
