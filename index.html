@@ -198,7 +198,7 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <button onclick="switchTab('settlement',this)">정산</button>
     </nav>
     <button class="btn btn-outline btn-sm" style="margin-left:auto;white-space:nowrap" onclick="openHelp()">📖 프로그램 사용법</button>
-    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.37</button>
+    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.38</button>
     <button class="btn btn-outline btn-sm" style="white-space:nowrap" onclick="logout()" title="이 브라우저에서 로그아웃">🔒 잠금</button>
     <span id="sync-badge">동기화 중...</span>
   </header>
@@ -595,8 +595,22 @@ async function handleFileSelect(inputId,statusId,label){
   if(!input||!input.files[0])return;
   status.textContent='업로드 중...';status.className='file-status';
   const url=await uploadToDrive(input.files[0],label);
-  if(url){uploadedFiles[inputId]=url;status.innerHTML=fileStatusHtml(url,inputId,statusId);status.className='file-status ok';}
-  else{status.textContent='✗ 업로드 실패';status.className='file-status err';}
+  if(!url){status.textContent='✗ 업로드 실패';status.className='file-status err';return}
+  uploadedFiles[inputId]=url;
+  status.innerHTML=fileStatusHtml(url,inputId,statusId);status.className='file-status ok';
+
+  // 올리는 즉시 시트에 저장한다 — '계약 완료'/'협찬 완료'를 누르지 않고 창을 닫아도 남는다.
+  // (계약서를 먼저 받고 통장사본·신분증은 나중에 오는 경우가 많음)
+  const field=FILE_FIELD[inputId];
+  const id=selectedId;
+  if(!field||!id)return;
+  const prev=(localGet(id)||{})[field]||'';
+  localUpdate(id,{[field]:url});
+  const tail=t=>{const el=document.getElementById(statusId);if(el)el.innerHTML=fileStatusHtml(url,inputId,statusId)+t};
+  tail(' <span class="text-muted" style="font-size:11px">저장 중…</span>');
+  syncStart();const r=await api('update',{id,[field]:url});syncEnd();
+  if(r&&r.success)tail(' <span style="color:var(--success);font-size:11px">저장됨</span>');
+  else{localUpdate(id,{[field]:prev});tail(' <span style="color:var(--danger);font-size:11px">저장 실패 — 다시 올려주세요</span>');}
 }
 async function deleteUploadedFile(inputId,statusId,field){
   const url=uploadedFiles[inputId]||(field&&selectedId&&(localGet(selectedId)||{})[field])||'';
@@ -1198,6 +1212,10 @@ function renderPanel(){
     const v=formatDate(inf.product_sent_date);const isProductOnly=inf.product_only==='Y';
     actionHtml+=`<div class="fg"><label>제품 발송일</label><input type="date" id="p-product-date" value="${v!=='-'?v:today}"></div>
     <div class="fg"><label>광고 코드</label><input type="text" id="p-ad-code" value="${inf.ad_code||''}" placeholder="광고 코드 입력"></div>
+    <div class="fg"><label>계약서 파일 <span class="text-muted" style="font-weight:400">— 계약서가 늦게 오면 여기서 올려도 됩니다 (계약서발송/수집 단계와 같은 칸)</span></label>
+      <input type="file" id="p-contract-file" accept=".pdf,.jpg,.jpeg,.png,.heic" onchange="handleFileSelect('p-contract-file','contract-status','${escJs(fileLabel(inf,'계약서'))}')">
+      <span id="contract-status" class="file-status${inf.contract_file?' ok':''}">${inf.contract_file?fileStatusHtml(inf.contract_file,'p-contract-file','contract-status'):''}</span>
+    </div>
     <div class="cb-row" style="margin-bottom:10px">
       <input type="checkbox" id="p-product-only" ${isProductOnly?'checked':''} onchange="toggleProductOnly(this.checked)">
       <label for="p-product-only" style="font-size:13px">제품만 협찬 (통장사본/신분증 불필요)</label>
@@ -1930,8 +1948,9 @@ function cancelSettle(){
 function openHelp(){document.getElementById('help-overlay').classList.add('open')}
 function closeHelp(e){if(!e||e.target===document.getElementById('help-overlay'))document.getElementById('help-overlay').classList.remove('open')}
 
-const APP_VERSION='v2.37';
+const APP_VERSION='v2.38';
 const CHANGELOG=[
+  {v:'v2.38',d:'2026-09-02',items:['광고 코드/입금정보 수집 단계에서도 계약서를 올릴 수 있습니다 (계약서발송/수집 단계와 같은 칸 — 경로만 두 개)','파일을 올리면 즉시 저장됩니다. [계약 완료]/[협찬 완료]를 누르지 않고 창을 닫아도 남습니다']},
   {v:'v2.37',d:'2026-09-02',items:['파일 업로드(계약서·통장사본·신분증)와 삭제 기능 복구 — v2.36 비밀번호 잠금 이후 이 세 경로에 인증 토큰이 빠져 있어 실패했습니다']},
   {v:'v2.36',d:'2026-09-02',items:['비밀번호 잠금 — 비밀번호를 입력해야 데이터를 불러옵니다. 검증은 서버(Apps Script)에서 하므로 소스를 뜯어봐도 우회되지 않습니다','헤더의 [🔒 잠금] 으로 이 브라우저에서 로그아웃']},
   {v:'v2.35',d:'2026-08-31',items:['관리 탭에서 선택한 인플루언서에게 바로 DM 발송 — 발송 확인된 사람만 DM 발송일이 기록됩니다','제품 배지를 클릭해 그 자리에서 협찬 제품 변경','여러 명을 선택한 채 드래그하면 선택 전원의 제품·단계가 함께 바뀝니다 (예전엔 끌어놓은 1명만 바뀜)']},
