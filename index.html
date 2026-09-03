@@ -198,7 +198,7 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <button onclick="switchTab('settlement',this)">정산</button>
     </nav>
     <button class="btn btn-outline btn-sm" style="margin-left:auto;white-space:nowrap" onclick="openHelp()">📖 프로그램 사용법</button>
-    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.40</button>
+    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.41</button>
     <button class="btn btn-outline btn-sm" style="white-space:nowrap" onclick="logout()" title="이 브라우저에서 로그아웃">🔒 잠금</button>
     <span id="sync-badge">동기화 중...</span>
   </header>
@@ -513,6 +513,28 @@ let syncCount=0;
 function syncStart(){syncCount++;document.getElementById('sync-badge').classList.add('show')}
 function syncEnd(){syncCount=Math.max(0,syncCount-1);if(!syncCount)document.getElementById('sync-badge').classList.remove('show')}
 
+// 일괄 작업에서 요청을 한꺼번에 다 보내면 일부가 'Failed to fetch' 로 끊긴다
+// (구글 쪽 동시 연결 제한 — 실측 시 100건 동시 요청 중 44건이 끊겼다).
+// 동시에 도는 요청 수를 제한하고, 실패한 건은 잠시 뒤 다시 시도한다.
+async function runLimited(items,fn,opt){
+  const {limit=4,retries=2,retryDelay=700,isOk=(r)=>r&&r.success}=opt||{};
+  const results=new Array(items.length);
+  let cursor=0;
+  const worker=async()=>{
+    while(cursor<items.length){
+      const idx=cursor++;
+      let r=null;
+      for(let attempt=0;attempt<=retries;attempt++){
+        r=await fn(items[idx],idx,attempt);
+        if(isOk(r))break;
+        if(attempt<retries)await new Promise(s=>setTimeout(s,retryDelay*(attempt+1)));
+      }
+      results[idx]=r;
+    }
+  };
+  await Promise.all(Array.from({length:Math.max(1,Math.min(limit,items.length))},worker));
+  return results;
+}
 function isTempId(id){return String(id||'').startsWith('temp_');}
 const SAVING_MSG='아직 저장 중인 항목입니다. 1~2초 후 다시 시도해주세요.';
 
@@ -802,11 +824,11 @@ async function dropToProduct(id,product){
   if(ids.length>1){selectedIds.clear();updateBulkBar()}
   render();renderProductTabs();refreshProductDatalist();renderPanel();
   syncStart();
-  const results=await Promise.all(backups.map(b=>api('update',{id:b.id,product:newProduct})));
+  const results=await runLimited(backups,b=>api('update',{id:b.id,product:newProduct}));
   syncEnd();
-  const failed=[];
-  results.forEach((r,idx)=>{if(!r||!r.success){localUpdate(backups[idx].id,{product:backups[idx].product});failed.push(backups[idx].id)}});
-  if(failed.length){render();renderProductTabs();renderPanel();alert(failed.length+'명은 저장에 실패해 원래대로 되돌렸습니다.')}
+  const failed=[];let failReason='';
+  results.forEach((r,idx)=>{if(!r||!r.success){if(!failReason)failReason=(r&&r.error)||'응답 없음';localUpdate(backups[idx].id,{product:backups[idx].product});failed.push(backups[idx].id)}});
+  if(failed.length){render();renderProductTabs();renderPanel();alert(`${failed.length}명은 저장에 실패해 원래대로 되돌렸습니다.\n사유: ${failReason}\n\n잠시 후 다시 시도해주세요.`)}
 }
 
 let lpTimer=null,touchStartX=0,touchStartY=0,touchDragging=false,touchGhost=null,touchDragId=null,lastDropEl=null;
@@ -906,11 +928,11 @@ async function dropToStage(id,target){
   if(ids.length>1){selectedIds.clear();updateBulkBar()}
   render();renderPanel();
   syncStart();
-  const results=await Promise.all(items.map(it=>api('update',Object.assign({id:it.id},it.changes))));
+  const results=await runLimited(items,it=>api('update',Object.assign({id:it.id},it.changes)));
   syncEnd();
-  const failed=[];
-  results.forEach((r,idx)=>{if(!r||!r.success){localUpdate(items[idx].id,items[idx].backup);failed.push(items[idx].id)}});
-  if(failed.length){render();renderPanel();alert(failed.length+'명은 저장에 실패해 원래대로 되돌렸습니다.')}
+  const failed=[];let failReason='';
+  results.forEach((r,idx)=>{if(!r||!r.success){if(!failReason)failReason=(r&&r.error)||'응답 없음';localUpdate(items[idx].id,items[idx].backup);failed.push(items[idx].id)}});
+  if(failed.length){render();renderPanel();alert(`${failed.length}명은 저장에 실패해 원래대로 되돌렸습니다.\n사유: ${failReason}\n\n잠시 후 다시 시도해주세요.`)}
 }
 
 function getFilteredList(){
@@ -1022,7 +1044,9 @@ async function bulkAdvance(){
   const advanced=[];
   ids.forEach(id=>{const inf=localGet(id);if(!inf||inf.status!=='active')return;const next=getNextStageId(Number(inf.stage));if(next!==null){const ch=next===7?{stage:next,sponsorship_done:'Y'}:{stage:next};if(Number(inf.stage)<=1){ch.dm_sent='Y';ch.dm_sent_date=inf.dm_sent_date||new Date().toISOString().split('T')[0];}localUpdate(id,ch);advanced.push({id,ch})}});
   selectedIds.clear();updateBulkBar();render();
-  syncStart();await Promise.all(advanced.map(a=>api('update',Object.assign({id:a.id},a.ch))));syncEnd();
+  syncStart();const advResults=await runLimited(advanced,a=>api('update',Object.assign({id:a.id},a.ch)));syncEnd();
+  const advFail=advResults.filter(r=>!r||!r.success).length;
+  if(advFail)alert(advFail+'명은 저장에 실패했습니다. 목록을 새로고침한 뒤 다시 시도해주세요.');
 }
 // 선택한 인원의 '협찬 제품'을 한 번에 지정/해제한다. (DM 발송 완료 단계에서 전체선택 후 쓰기 좋음)
 async function bulkSetProduct(){
@@ -1044,11 +1068,11 @@ async function bulkSetProduct(){
   try{localStorage.setItem('hattke_last_product',product)}catch(e){}
   selectedIds.clear();updateBulkBar();render();renderProductTabs();refreshProductDatalist();
   syncStart();
-  const results=await Promise.all(backups.map(b=>api('update',{id:b.id,product})));
+  const results=await runLimited(backups,b=>api('update',{id:b.id,product}));
   syncEnd();
-  const failed=[];
-  results.forEach((r,idx)=>{if(!r||!r.success){localUpdate(backups[idx].id,{product:backups[idx].product});failed.push(backups[idx].id)}});
-  if(failed.length){render();renderProductTabs();alert(failed.length+'명은 저장에 실패해 원래대로 되돌렸습니다.');}
+  const failed=[];let failReason='';
+  results.forEach((r,idx)=>{if(!r||!r.success){if(!failReason)failReason=(r&&r.error)||'응답 없음';localUpdate(backups[idx].id,{product:backups[idx].product});failed.push(backups[idx].id)}});
+  if(failed.length){render();renderProductTabs();alert(`${failed.length}명은 저장에 실패해 원래대로 되돌렸습니다.\n사유: ${failReason}\n\n잠시 후 다시 시도해주세요.`);}
   else alert(`${ids.length}명의 협찬 제품을 ${product?`'${product}'(으)로 지정`:'해제'}했습니다.`
     +(pending?`\n(저장 중이던 ${pending}명은 제외했습니다)`:''));
 }
@@ -1057,7 +1081,9 @@ async function bulkReject(){
   const ids=[...selectedIds];
   ids.forEach(id=>{const inf=localGet(id);if(inf&&inf.status==='active')localUpdate(id,{status:'rejected'})});
   selectedIds.clear();updateBulkBar();render();
-  syncStart();await Promise.all(ids.map(id=>api('update',{id,status:'rejected'})));syncEnd();
+  syncStart();const rejResults=await runLimited(ids,id=>api('update',{id,status:'rejected'}));syncEnd();
+  const rejFail=rejResults.filter(r=>!r||!r.success).length;
+  if(rejFail)alert(rejFail+'명은 저장에 실패했습니다. 목록을 새로고침한 뒤 다시 시도해주세요.');
 }
 async function bulkDelete(){
   if(!confirm(selectedIds.size+'명을 완전히 삭제할까요?\n삭제 후 복구할 수 없습니다.'))return;
@@ -1067,11 +1093,14 @@ async function bulkDelete(){
   ids.forEach(id=>localRemove(id));
   selectedIds.clear();updateBulkBar();render();closePanel();
   syncStart();
-  const results=await Promise.all(ids.map(id=>{
+  const results=await runLimited(ids,(id,idx,attempt)=>{
     const url=new URL(SCRIPT_URL);url.searchParams.set('action','delete');url.searchParams.set('id',id);
     if(authToken)url.searchParams.set('token',authToken);
-    return fetch(url.toString()).then(r=>r.json()).catch(e=>({success:false,error:e.message}));
-  }));
+    return fetch(url.toString()).then(r=>r.json())
+      // 재시도인데 'Not found' 면 앞선 시도에서 이미 지워진 것 — 성공으로 본다
+      .then(r=>(!r.success&&attempt>0&&/not found/i.test(r.error||''))?{success:true,already:true}:r)
+      .catch(e=>({success:false,error:e.message}));
+  });
   syncEnd();
   const failed=results.filter(r=>!r.success).length;
   if(failed>0){
@@ -1701,7 +1730,7 @@ async function markDmSent(results){
   if(!ids.length)return 0;
   ids.forEach(id=>localUpdate(id,{dm_sent:'Y',dm_sent_date:today}));
   render();
-  syncStart();await Promise.all(ids.map(id=>api('update',{id,dm_sent:'Y',dm_sent_date:today})));syncEnd();
+  syncStart();await runLimited(ids,id=>api('update',{id,dm_sent:'Y',dm_sent_date:today}));syncEnd();
   return ids.length;
 }
 async function instaDm(send){
@@ -2023,8 +2052,9 @@ function cancelSettle(){
 function openHelp(){document.getElementById('help-overlay').classList.add('open')}
 function closeHelp(e){if(!e||e.target===document.getElementById('help-overlay'))document.getElementById('help-overlay').classList.remove('open')}
 
-const APP_VERSION='v2.40';
+const APP_VERSION='v2.41';
 const CHANGELOG=[
+  {v:'v2.41',d:'2026-09-03',items:['일괄 작업(제품 지정·단계 이동·거절·삭제)에서 일부가 저장 실패하던 문제 해결 — 요청을 한꺼번에 보내다 구글 쪽 연결 제한에 걸리던 것을 4건씩 나눠 보내고 실패 시 자동 재시도합니다','실패했을 때 사유를 함께 보여줍니다']},
   {v:'v2.40',d:'2026-09-03',items:['관리자 아이디/비밀번호를 서버(Apps Script)에서 검증하도록 변경 — 소스에 적혀 있던 계정 정보를 없앴습니다','관리자 계정은 Apps Script 의 applyAdminPassword 로 직접 설정·변경합니다']},
   {v:'v2.39',d:'2026-09-03',items:['정산 탭에서 관리자가 [⚙️ 건수당 비용 수정] 으로 DM 발송·협찬 성사 단가를 직접 바꿀 수 있습니다 (구글 시트에 저장 — 팀 공용)','단가를 0원으로 두면 그 항목은 정산에서 빠지고 건수가 - 로 표시됩니다']},
   {v:'v2.38',d:'2026-09-02',items:['광고 코드/입금정보 수집 단계에서도 계약서를 올릴 수 있습니다 (계약서발송/수집 단계와 같은 칸 — 경로만 두 개)','파일을 올리면 즉시 저장됩니다. [계약 완료]/[협찬 완료]를 누르지 않고 창을 닫아도 남습니다']},
