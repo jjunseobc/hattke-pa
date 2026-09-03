@@ -198,7 +198,7 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <button onclick="switchTab('settlement',this)">정산</button>
     </nav>
     <button class="btn btn-outline btn-sm" style="margin-left:auto;white-space:nowrap" onclick="openHelp()">📖 프로그램 사용법</button>
-    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.42</button>
+    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.43</button>
     <button class="btn btn-outline btn-sm" style="white-space:nowrap" onclick="logout()" title="이 브라우저에서 로그아웃">🔒 잠금</button>
     <span id="sync-badge">동기화 중...</span>
   </header>
@@ -1739,15 +1739,27 @@ function openManageDmModal(){
 }
 function closeDmModal(e){if(!e||e.target===document.getElementById('dm-overlay'))document.getElementById('dm-overlay').classList.remove('open');}
 // 발송이 확인된 대상만 시트에 DM 발송 기록을 남긴다(관리 탭에서 연 경우).
+// 발송이 '확인된' 사람만 기록한다. 리스팅 목록(0단계)에 있던 사람은
+// DM이 나간 것이므로 'DM 발송 완료/진행 대기'(2단계)로 함께 옮긴다.
 async function markDmSent(results){
   const byUser={};dmTargets.forEach(t=>{if(t.id)byUser[String(t.username).toLowerCase()]=t.id});
   const today=new Date().toISOString().split('T')[0];
   const ids=(results||[]).filter(x=>x.sent).map(x=>byUser[String(x.username).toLowerCase()]).filter(Boolean);
-  if(!ids.length)return 0;
-  ids.forEach(id=>localUpdate(id,{dm_sent:'Y',dm_sent_date:today}));
+  if(!ids.length)return {marked:0,moved:0};
+  const items=ids.map(id=>{
+    const inf=localGet(id)||{};
+    const ch={dm_sent:'Y',dm_sent_date:inf.dm_sent_date||today};
+    if(inf.status==='active'&&Number(inf.stage)<=1)ch.stage=2;   // 리스팅 목록 → DM 발송 완료
+    return {id,ch};
+  });
+  items.forEach(it=>localUpdate(it.id,it.ch));
   render();
-  syncStart();await runLimited(ids,id=>api('update',{id,dm_sent:'Y',dm_sent_date:today}));syncEnd();
-  return ids.length;
+  syncStart();
+  const res=await runLimited(items,it=>api('update',Object.assign({id:it.id},it.ch)));
+  syncEnd();
+  const failed=res.filter(r=>!r||!r.success).length;
+  if(failed)await reloadFromServer(`${failed}명은 DM 발송 기록 저장에 실패했습니다.\n서버에서 다시 불러와 현재 상태를 표시했습니다.`);
+  return {marked:items.length,moved:items.filter(it=>it.ch.stage===2).length};
 }
 async function instaDm(send){
   if(!dmTargets.length)return;
@@ -1766,8 +1778,10 @@ async function instaDm(send){
       const rows=result.results||[];
       const sent=rows.filter(x=>x.sent).length,can=rows.filter(x=>x.canDM).length;
       if(!send){st.textContent=`미리보기: DM 가능 ${can}/${rows.length}명 (발송 안 함)`;return}
-      const marked=await markDmSent(rows);
-      st.textContent=`발송 완료: ${sent}/${rows.length}명`+(marked?` · ${marked}명 DM 발송일 기록됨`:'')
+      const {marked,moved}=await markDmSent(rows);
+      st.textContent=`발송 완료: ${sent}/${rows.length}명`
+        +(marked?` · ${marked}명 발송일 기록`:'')
+        +(moved?` · ${moved}명 'DM 발송 완료' 단계로 이동`:'')
         +(sent<rows.length?` · 실패 ${rows.length-sent}명은 아래 로그 확인`:'');
     });
   }catch(e){st.textContent='브리지 연결 실패';document.getElementById('dm-preview-btn').disabled=false;document.getElementById('dm-send-btn').disabled=false;}
@@ -2068,8 +2082,9 @@ function cancelSettle(){
 function openHelp(){document.getElementById('help-overlay').classList.add('open')}
 function closeHelp(e){if(!e||e.target===document.getElementById('help-overlay'))document.getElementById('help-overlay').classList.remove('open')}
 
-const APP_VERSION='v2.42';
+const APP_VERSION='v2.43';
 const CHANGELOG=[
+  {v:'v2.43',d:'2026-09-03',items:['DM 발송에 성공하면 리스팅 목록에 있던 인플루언서를 DM 발송 완료 단계로 자동 이동','우측 하단 작은 채팅창으로 열리는 경우에도 DM이 정상 발송되도록 수정 (브리지 쪽 수정 — 재배포 불필요)']},
   {v:'v2.42',d:'2026-09-03',items:['일괄 작업이 일부 실패했을 때 화면만 옛 값으로 되돌리던 문제 수정 — 실제로는 저장됐는데 화면에서 사라진 것처럼 보였습니다. 이제 서버에서 다시 읽어와 진짜 상태를 보여줍니다']},
   {v:'v2.41',d:'2026-09-03',items:['일괄 작업(제품 지정·단계 이동·거절·삭제)에서 일부가 저장 실패하던 문제 해결 — 요청을 한꺼번에 보내다 구글 쪽 연결 제한에 걸리던 것을 4건씩 나눠 보내고 실패 시 자동 재시도합니다','실패했을 때 사유를 함께 보여줍니다']},
   {v:'v2.40',d:'2026-09-03',items:['관리자 아이디/비밀번호를 서버(Apps Script)에서 검증하도록 변경 — 소스에 적혀 있던 계정 정보를 없앴습니다','관리자 계정은 Apps Script 의 applyAdminPassword 로 직접 설정·변경합니다']},
