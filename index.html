@@ -198,7 +198,7 @@ body.dragging-row{-webkit-user-select:none;user-select:none}
       <button onclick="switchTab('settlement',this)">정산</button>
     </nav>
     <button class="btn btn-outline btn-sm" style="margin-left:auto;white-space:nowrap" onclick="openHelp()">📖 프로그램 사용법</button>
-    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.47</button>
+    <button class="btn btn-outline btn-sm" id="version-btn" style="white-space:nowrap;color:var(--primary)" onclick="openChangelog()" title="업데이트 내역 보기">v2.48</button>
     <button class="btn btn-outline btn-sm" style="white-space:nowrap" onclick="logout()" title="이 브라우저에서 로그아웃">🔒 잠금</button>
     <span id="sync-badge">동기화 중...</span>
   </header>
@@ -1558,10 +1558,34 @@ async function flexWrite(){
   if(inf.contract_file)files.push({fileId:fid(inf.contract_file),label:realname+'_계약서'});
   if(!confirm(`Flex '프리랜서 용역비 지급 요청'을 실제로 제출(결재요청)할까요?\n\n· 프리랜서명/예금주: ${realname}\n· 주민번호: ${rrn}\n· 은행/계좌: ${bank} / ${account}\n· 첨부파일: ${files.length}건\n· 용역비(세후): 48,350\n\n※ 결재자(김다슬·경영지원팀)에게 요청이 전송됩니다.`))return;
   const btn=document.getElementById('flex-btn'),st=document.getElementById('flex-status');
-  btn.disabled=true;st.className='file-status';st.textContent='Flex 작성·첨부·제출 중... (30초~1분, 이 PC 브리지 사용)';
+  btn.disabled=true;st.className='file-status';
+
+  // ① 첨부파일은 이 페이지(브라우저)가 직접 받아 브리지에 넘긴다.
+  //    예전엔 브리지(Node)가 구글에서 받았는데, Node의 구글 요청이 1.5~28초로 들쭉날쭉해서
+  //    그 사이 구글의 임시 응답 주소(user_content_key)가 만료돼 404 HTML이 오곤 했다.
+  //    브라우저는 같은 파일을 빠르게 받는다(OCR 에서 이미 쓰는 경로).
+  const payload=[];
+  for(let i=0;i<files.length;i++){
+    const f=files[i];
+    st.textContent=`첨부파일 준비 중... (${i+1}/${files.length}) ${f.label}`;
+    let r=null;
+    for(let attempt=0;attempt<3;attempt++){
+      r=await api('getFileBase64',{fileId:f.fileId});
+      if(r&&r.success)break;
+      if(r&&r.needLogin)break;
+      await new Promise(s=>setTimeout(s,1200*(attempt+1)));
+    }
+    if(!r||!r.success){
+      st.className='file-status err';
+      st.textContent=`${f.label} 파일을 불러오지 못했습니다(${(r&&r.error)||'응답 없음'}). 업로드된 파일이 있는지 확인해주세요. (Flex에는 제출되지 않았습니다)`;
+      btn.disabled=false;return;
+    }
+    payload.push({label:f.label,mimeType:r.mimeType,base64:r.base64});
+  }
+
+  st.textContent='Flex 작성·첨부·제출 중... (30초~1분, 이 PC 브리지 사용)';
   try{
-    // token: 브리지가 Apps Script 에서 첨부파일(통장사본 등)을 받아올 때 필요 (비밀번호 잠금 이후 필수)
-    const res=await fetch('http://localhost:8787/flex',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({realname,rrn,bank,account,files,token:authToken})});
+    const res=await fetch('http://localhost:8787/flex',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({realname,rrn,bank,account,files:payload})});
     const r=await res.json();
     if(r&&r.success){st.className='file-status ok';st.textContent='✓ Flex 결재 요청 완료';}
     else{
@@ -2200,8 +2224,9 @@ function cancelSettle(){
 function openHelp(){document.getElementById('help-overlay').classList.add('open')}
 function closeHelp(e){if(!e||e.target===document.getElementById('help-overlay'))document.getElementById('help-overlay').classList.remove('open')}
 
-const APP_VERSION='v2.47';
+const APP_VERSION='v2.48';
 const CHANGELOG=[
+  {v:'v2.48',d:'2026-09-17',items:['Flex 자동 제출 첨부파일을 페이지가 직접 받아 브리지로 넘기도록 변경 — 브리지가 구글에서 받을 때 응답이 느려 임시 주소가 만료(404)되던 문제 해결. 진행 상황(첨부파일 n/n)도 표시']},
   {v:'v2.47',d:'2026-09-17',items:['Flex 용역비 자동 제출 시 첨부파일(통장사본 등)을 못 불러오던 문제 수정 — 비밀번호 잠금 이후 브리지에 로그인 토큰이 전달되지 않았습니다','브리지 오류를 원인별로 안내합니다. 브리지·크롬(CDP)이 꺼져 있으면 실행할 프로그램 경로를 함께 보여줍니다']},
   {v:'v2.46',d:'2026-09-03',items:['DM 문구가 새로고침하면 초기화되던 문제 해결 — 고친 내용이 자동 저장됩니다','협업 제안 DM 모달에서 보낼 문구를 목록에서 고를 수 있습니다. 목록은 [인플루언서 DM 가이드] 탭에 저장한 문구를 그대로 씁니다']},
   {v:'v2.45',d:'2026-09-03',items:['인플루언서 찾기 - 비슷한 결 찾기에서 기준 제품을 고를 수 있습니다. 제품마다 결이 달라 그 제품으로 진행한 인플루언서만 시드로 씁니다','해시태그 점수판도 제품별로 따로 관리됩니다']},
